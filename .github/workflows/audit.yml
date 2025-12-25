@@ -1,0 +1,20 @@
+name: Audit Dependencies
+on:
+  push:
+    paths:
+      - '.github/workflows/audit.yml'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'audit.toml'
+  schedule:
+    - cron: '0 0 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/audit@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} # configuration is handled in the audit.toml file

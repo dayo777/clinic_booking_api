@@ -1,0 +1,19 @@
+# Cargo Audit configuration
+# For more information, see: https://github.com/RustSec/cargo-audit/blob/main/audit.toml
+
+[advisories]
+ignore = []
+informational_warnings = ["unmaintained", "unsound", "notice"]
+severity_threshold = "low"
+
+[database]
+# Using defaults for database
+
+[output]
+deny = ["unmaintained"]
+format = "terminal"
+show_tree = true
+
+[yanked]
+enabled = true
+update_index = true

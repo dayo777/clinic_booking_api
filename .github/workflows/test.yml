@@ -1,0 +1,20 @@
+name: test.yml
+on:
+  push:
+    branches: [dev, feature/*]
+  pull_request:
+    branches: [dev, feature/*]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Run Workspace Tests
+        run: cargo test --workspace

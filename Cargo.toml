@@ -13,4 +13,8 @@ resolver = "2"
 [workspace.dependencies]
 actix-web = "4.12.1"
 mongodb = "3.4.1"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
+futures = "0.3.31"
+config = "0.15.19"
+tokio = { version = "1.43.0", features = ["full"] }
+anyhow = "1.0.95"

@@ -231,6 +231,9 @@ dependencies = [
 [[package]]
 name = "appointment_service"
 version = "0.1.0"
+dependencies = [
+ "actix-web",
+]
 
 [[package]]
 name = "arraydeque"
@@ -373,11 +376,18 @@ name = "clinic_core"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "appointment_service",
+ "clinic_service",
+ "doctor_service",
+ "patient_service",
 ]
 
 [[package]]
 name = "clinic_service"
 version = "0.1.0"
+dependencies = [
+ "actix-web",
+]
 
 [[package]]
 name = "common"
@@ -650,6 +660,9 @@ dependencies = [
 [[package]]
 name = "doctor_service"
 version = "0.1.0"
+dependencies = [
+ "actix-web",
+]
 
 [[package]]
 name = "encoding_rs"
@@ -1440,6 +1453,9 @@ checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 [[package]]
 name = "patient_service"
 version = "0.1.0"
+dependencies = [
+ "actix-web",
+]
 
 [[package]]
 name = "pbkdf2"

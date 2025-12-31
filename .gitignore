@@ -11,6 +11,8 @@
 .env
 .env.*
 !.env.example
+settings_dev.toml
+settings_prod.toml
 
 # OS
 .DS_Store

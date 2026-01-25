@@ -5,6 +5,14 @@ edition = "2024"
 
 [dependencies]
 actix-web = { workspace = true}
+tracing-actix-web = { workspace = true }
+tracing = { workspace = true }
+config = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true }
 # import internally libraries below, and Rust crates above
 appointment_service = { path = "../appointment_service"}
 clinic_service = { path = "../clinic_service"}

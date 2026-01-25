@@ -3,18 +3,24 @@ members = [
     "appointment_service",
     "clinic_core",
     "clinic_service",
-    "common",
     "doctor_service",
-    "patient_service"
+    "patient_service",
 ]
 
 resolver = "2"
 
 [workspace.dependencies]
 actix-web = "4.12.1"
-mongodb = "3.4.1"
+mongodb = { version = "3.4.1" , features = ["tracing-unstable"] }
 serde = { version = "1.0.228", features = ["derive"] }
 futures = "0.3.31"
 config = "0.15.19"
 tokio = { version = "1.43.0", features = ["full"] }
 anyhow = "1.0.95"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "registry"] }
+tracing-opentelemetry = "0.32.1"
+opentelemetry = { version = "0.31.0", features = ["metrics", "logs"] }
+opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
+tracing-actix-web = "0.7.21"

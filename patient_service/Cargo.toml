@@ -5,3 +5,11 @@ edition = "2024"
 
 [dependencies]
 actix-web = { workspace = true}
+tracing = { workspace = true }
+serde = { workspace = true }
+mongodb = { workspace = true }
+thiserror = { workspace = true }
+validator = { workspace = true }
+strum = { workspace = true }
+chrono = { workspace = true }
+common = { path = "../common" } # import the DB helper from here

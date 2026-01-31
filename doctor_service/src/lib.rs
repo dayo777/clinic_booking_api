@@ -1,9 +1,23 @@
-use actix_web::{HttpResponse, web};
+mod error;
+mod handlers;
+mod models;
+mod repository;
+
+use actix_web::{HttpResponse, guard, web};
 
 pub fn doctor_config_v1(cfg: &mut web::ServiceConfig) {
+    tracing::info!("The doctor service is starting");
     cfg.service(
-        web::resource("/doctor")
-            .route(web::get().to(|| async { HttpResponse::Ok().body("doctor endpoint v1") }))
-            .route(web::head().to(HttpResponse::MethodNotAllowed)),
+        web::scope("/doctor")
+            .service(handlers::create_doctor)
+            .service(handlers::get_doctor)
+            .service(handlers::list_doctors)
+            .service(handlers::delete_doctor)
+            .service(handlers::update_doctor)
+            .default_service(
+                web::route()
+                    .guard(guard::Head())
+                    .to(HttpResponse::MethodNotAllowed),
+            ),
     );
 }

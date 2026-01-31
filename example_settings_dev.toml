@@ -1,0 +1,6 @@
+[mongodb]
+uri = 'enter-mongodb-uri-here'
+database = 'clinic_booking_api or the name of your database here'
+
+[tracing]
+OTEL_EXPORTER_OTLP_ENDPOINT = 'http://localhost:4317'

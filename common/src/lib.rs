@@ -1,17 +1,4 @@
-mod auth;
-mod db;
+//! Declare all shared services like logging, database init etc. in this workspace
 
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub mod db;
+pub mod logging;

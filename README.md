@@ -1,6 +1,6 @@
 # Clinic Booking API (Test Project)
 
-Note: This is a simple test API created for personal learning and testing purposes. It is not intended for production use or any serious applications.
+Note: This is a simple test API created for my testing purposes.
 
 ### How to Pull the Image
 
@@ -24,10 +24,12 @@ docker run -d -p 8080:8080 dayo777/clinic-booking-api:main
 ### Quick Test Command
 
 ```
-curl -H "x-api-version: 1" http://localhost:8080/api/
+curl -X GET -H "x-api-version: 1" http://localhost:8080/api/
 ```
 
 ### Available Endpoints
+For a detailed list of all available endpoints and their specifications, please refer to [endpoints.md](endpoints.md).
+
 | Endpoint | Method | Description | 
 | :--- | :--- | :--- | 
 | /api | GET | Test welcome message |
@@ -42,4 +44,4 @@ The API uses header-based versioning. To access any of the endpoints below, you 
 - Built with: Rust (Actix-web)
 - Port: 8080
 - Current Version: Header-based (x-api-version: 1)
-- Status: Personal Test Project / Not for Production
+- Status: WIP

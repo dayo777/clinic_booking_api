@@ -1,7 +1,13 @@
+//! Patient Service
+//!
+//! This crate provides the patient management functionality for the clinic booking API,
+//! including registration, retrieval, and management of patient records.
+
 mod error;
 mod handlers;
 mod models;
 mod repository;
+pub mod utils;
 
 use actix_web::{HttpResponse, guard, web};
 

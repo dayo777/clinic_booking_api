@@ -1,5 +1,4 @@
-mod logging;
-
+//! Always ensure to start the Jaegar & MongoDB service
 use actix_web::guard::{Guard, GuardContext};
 use actix_web::middleware::{NormalizePath, TrailingSlash};
 use actix_web::{App, HttpServer, Responder, web};
@@ -14,11 +13,16 @@ use patient_service::patient_config_v1;
 #[actix_web::main]
 #[tracing::instrument]
 async fn main() -> std::io::Result<()> {
-    logging::init_tracing("clinic_core");
+    common::logging::init_tracing("clinic_core");
     tracing::info!("Starting clinic_core service");
 
-    HttpServer::new(|| {
+    // database should only be initialized once.
+    let database = common::db::init_db().await;
+    let db_data = web::Data::new(database);
+
+    HttpServer::new(move || {
         App::new()
+            .app_data(db_data.clone())
             .wrap(NormalizePath::new(TrailingSlash::Trim))
             .wrap(TracingLogger::default())
             .service(

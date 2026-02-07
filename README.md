@@ -1,7 +1,6 @@
 # Clinic Booking API (Test Project)
 
-Note: This is a simple test API created for my testing purposes.
-
+Note: `settings_dev.toml` is not pushed to VCS, and is required to run this app. I used K8s secret resource to create the file. 
 ### How to Pull the Image
 
 To pull this test image from Docker Hub, use:

@@ -8,6 +8,7 @@ actix-web = { workspace = true}
 tracing = { workspace = true }
 serde = { workspace = true }
 mongodb = { workspace = true }
+futures = { workspace = true }
 thiserror = { workspace = true }
 validator = { workspace = true }
 strum = { workspace = true }

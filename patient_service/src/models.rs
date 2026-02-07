@@ -34,6 +34,7 @@ pub(crate) struct PatientDto {
     pub(crate) is_active: bool,
     pub(crate) created_at: DateTime<Utc>,
     pub(crate) updated_at: Option<DateTime<Utc>>,
+    pub(crate) deleted_at: Option<DateTime<Utc>>,
 }
 
 // initial Patient registration. Other medical details and Insurance are added later
@@ -41,9 +42,27 @@ pub(crate) struct PatientDto {
 pub(crate) struct CreatePatientDto {
     #[validate(length(min = 3, max = 100))]
     pub(crate) name: String,
-    pub(crate) dob: NaiveDate,
+    pub(crate) dob: NaiveDate, // YYYY, MM, DD
     pub(crate) gender: Gender,
     pub(crate) contact_info: ContactInfo,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct PatientResponseDto {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) age: u8,
+    pub(crate) dob: NaiveDate,
+    pub(crate) gender: Gender,
+    pub(crate) contact: ContactInfo,
+    pub(crate) medical_alerts: Option<MedicalAlerts>,
+    pub(crate) insurance: Option<InsuranceInfo>,
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct PaginationQuery {
+    pub(crate) page: Option<u64>,
+    pub(crate) limit: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, EnumString, Display)]
@@ -55,12 +74,6 @@ pub(crate) enum Gender {
     #[strum(serialize = "other")]
     Other,
 }
-
-// TODO: modify this for outputs
-// #[derive(Serialize, Deserialize, Debug)]
-// pub struct PatientOutputDto {
-//     name: String,
-// }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Validate)]
 pub struct ContactInfo {
@@ -82,10 +95,26 @@ pub struct MedicalAlerts {
     pub current_medications: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Validate)]
 pub struct InsuranceInfo {
     pub provider_name: String,
     pub policy_number: String,
     pub group_number: Option<String>,
     pub primary_holder_name: String,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub(crate) struct UpdateInsuranceDto {
+    pub provider_name: Option<String>,
+    pub policy_number: Option<String>,
+    pub group_number: Option<String>,
+    pub primary_holder_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub(crate) struct UpdateMedicalAlertsDto {
+    pub blood_type: Option<String>,
+    pub allergies: Option<Vec<String>>,
+    pub chronic_conditions: Option<Vec<String>>,
+    pub current_medications: Option<Vec<String>>,
 }

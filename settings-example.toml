@@ -1,0 +1,7 @@
+# example file containing Credential structure
+[mongodb]
+uri = 'enter the mongodbURI here'
+database = 'clinic_booking_api' # you can change the name here
+
+[tracing]
+OTEL_EXPORTER_OTLP_ENDPOINT = 'http://localhost:4317' # logging endpoint, you can change this here.

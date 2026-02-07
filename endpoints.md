@@ -11,11 +11,13 @@ Required header: `x-api-version: 1`
 ## Service Endpoints
 
 ### Patient Service
-- `GET /api/patient` - List all patients
+- `GET /api/patient` - List all patients (supports `page` and `limit` query params)
 - `POST /api/patient` - Register a new patient
 - `GET /api/patient/{id}` - Get patient details
 - `PUT /api/patient/{id}` - Update patient details
 - `DELETE /api/patient/{id}` - Delete/Archive patient
+- `PUT /api/patient/{id}/insurance` - Update patient insurance information
+- `PUT /api/patient/{id}/medical-alerts` - Update patient medical alerts
 
 ### Doctor Service
 - `GET /api/doctor` - List all doctors
@@ -35,10 +37,10 @@ Required header: `x-api-version: 1`
 - `GET /api/appointments` - List all appointments
 
 
-## Endpoint Testing
+## Available Endpoints
 
-### Create Patient
-To create a new patient, use the following `curl` command. You can copy and paste this directly into your terminal while the app is running.
+#### Create Patient
+To create a new patient, use the following `curl` command.
 
 ```bash
 curl -X POST http://localhost:8080/api/patient \
@@ -51,10 +53,55 @@ curl -X POST http://localhost:8080/api/patient \
            "contact_info": {
              "phone": "+111111",
              "email": "oruns@outlook.com",
-             "address": "House 1, Jaja Crescent",
+             "address": "House 1A, Jai Crescent",
              "emergency_contact_name": "Flavian Oruns",
              "emergency_contact_phone": "+127833"
            }
          }'
 ```
 
+#### Retrieve a Single Patient
+To return a single Patient data, pass the patient's MongoDB `ObjectId` as a path parameter.
+
+```bash
+curl -X GET http://localhost:8080/api/patient/65c2a1b2e4b0a12345678901 \
+     -H "x-api-version: 1"
+```
+
+#### List Patients with Pagination
+To list patients with pagination, use the `page` and `limit` query parameters.
+
+```bash
+curl -X GET "http://localhost:8080/api/patient?page=1&limit=10" \
+     -H "x-api-version: 1"
+```
+
+#### Update Patient Insurance
+To update the insurance information for an existing patient.
+
+```bash
+curl -X PUT http://localhost:8080/api/patient/65c2a1b2e4b0a12345678901/insurance \
+     -H "Content-Type: application/json" \
+     -H "x-api-version: 1" \
+     -d '{
+           "provider_name": "HealthShield",
+           "policy_number": "HS-987654321",
+           "group_number": "G-112233",
+           "primary_holder_name": "Dru Oruns"
+         }'
+```
+
+#### Update Patient Medical Alerts
+To update medical alerts (allergies, chronic conditions, etc.) for a patient.
+
+```bash
+curl -X PUT http://localhost:8080/api/patient/65c2a1b2e4b0a12345678901/medical-alerts \
+     -H "Content-Type: application/json" \
+     -H "x-api-version: 1" \
+     -d '{
+           "blood_type": "O+",
+           "allergies": ["Peanuts", "Penicillin"],
+           "chronic_conditions": ["Asthma"],
+           "current_medications": ["Albuterol"]
+         }'
+```

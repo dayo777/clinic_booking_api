@@ -4,11 +4,61 @@
 //! request and response bodies, as well as validation logic.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use mongodb::bson::oid::ObjectId;
-use serde::{Deserialize, Serialize};
+use mongodb::bson::{Bson, DateTime as BsonDateTime, oid::ObjectId};
+use serde::{Deserialize, Deserializer, Serialize};
 use strum::{Display, EnumString};
 use validator::Validate;
 
+/// Deserializes a BSON datetime field that may be stored as either BSON DateTime or an ISO string
+/// (e.g. from chrono's default serde, which serializes DateTime as string). Accepts both so that
+/// existing documents in MongoDB continue to work.
+fn deserialize_bson_datetime_or_string<'de, D>(deserializer: D) -> Result<BsonDateTime, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let bson_val = Bson::deserialize(deserializer)?;
+    match bson_val {
+        Bson::DateTime(dt) => Ok(dt),
+        Bson::String(s) => {
+            let chrono_dt: DateTime<Utc> = s
+                .parse()
+                .map_err(|e: chrono::ParseError| serde::de::Error::custom(e))?;
+            Ok(BsonDateTime::from_millis(chrono_dt.timestamp_millis()))
+        }
+        other => Err(serde::de::Error::custom(format!(
+            "expected DateTime or string, got {:?}",
+            other
+        ))),
+    }
+}
+
+/// Same as above for Option<BsonDateTime> (updated_at, deleted_at).
+fn deserialize_option_bson_datetime_or_string<'de, D>(
+    deserializer: D,
+) -> Result<Option<BsonDateTime>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt = Option::<Bson>::deserialize(deserializer)?;
+    match opt {
+        None => Ok(None),
+        Some(Bson::DateTime(dt)) => Ok(Some(dt)),
+        Some(Bson::String(s)) => {
+            let chrono_dt: DateTime<Utc> = s
+                .parse()
+                .map_err(|e: chrono::ParseError| serde::de::Error::custom(e))?;
+            Ok(Some(BsonDateTime::from_millis(
+                chrono_dt.timestamp_millis(),
+            )))
+        }
+        Some(other) => Err(serde::de::Error::custom(format!(
+            "expected DateTime or string, got {:?}",
+            other
+        ))),
+    }
+}
+
+// Dto = Data Object
 #[derive(Serialize, Deserialize, Debug, Validate)]
 pub(crate) struct PatientDto {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
@@ -32,9 +82,12 @@ pub(crate) struct PatientDto {
 
     // System Metadata
     pub(crate) is_active: bool,
-    pub(crate) created_at: DateTime<Utc>,
-    pub(crate) updated_at: Option<DateTime<Utc>>,
-    pub(crate) deleted_at: Option<DateTime<Utc>>,
+    #[serde(deserialize_with = "deserialize_bson_datetime_or_string")]
+    pub(crate) created_at: BsonDateTime,
+    #[serde(deserialize_with = "deserialize_option_bson_datetime_or_string")]
+    pub(crate) updated_at: Option<BsonDateTime>,
+    #[serde(deserialize_with = "deserialize_option_bson_datetime_or_string")]
+    pub(crate) deleted_at: Option<BsonDateTime>,
 }
 
 // initial Patient registration. Other medical details and Insurance are added later
@@ -49,7 +102,7 @@ pub(crate) struct CreatePatientDto {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct PatientResponseDto {
-    pub(crate) id: String,
+    pub(crate) id: ObjectId,
     pub(crate) name: String,
     pub(crate) age: u8,
     pub(crate) dob: NaiveDate,
@@ -117,4 +170,13 @@ pub(crate) struct UpdateMedicalAlertsDto {
     pub allergies: Option<Vec<String>>,
     pub chronic_conditions: Option<Vec<String>>,
     pub current_medications: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub(crate) struct UpdateContactInfoDto {
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub address: Option<String>,
+    pub emergency_contact_name: Option<String>,
+    pub emergency_contact_phone: Option<String>,
 }

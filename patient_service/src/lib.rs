@@ -19,9 +19,10 @@ pub fn patient_config_v1(cfg: &mut web::ServiceConfig) {
             .service(handlers::get_patient)
             .service(handlers::list_patients)
             .service(handlers::delete_patient)
-            .service(handlers::update_patient)
+            // .service(handlers::update_patient)
             .service(handlers::update_patient_insurance)
             .service(handlers::update_patient_medical_alerts)
+            .service(handlers::update_patient_contact_info)
             .default_service(
                 web::route()
                     .guard(guard::Head())

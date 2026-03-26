@@ -4,7 +4,7 @@
 
 use crate::{models, repository};
 use actix_web::{HttpResponse, delete, get, post, put, web};
-use tracing::{debug, error, info, info_span, instrument};
+use tracing::{debug, error, info, instrument};
 
 // existence Check (HEAD): SELECT 1 FROM patients WHERE id = 123 LIMIT 1;
 // (Fast: the database only checks the index and returns a single bit).
@@ -44,7 +44,6 @@ async fn create_patient(payload: web::Json<models::CreatePatientDto>) -> HttpRes
 #[get("/{id}")]
 #[instrument(
     name = "get_patient_request",
-    skip(payload),
     fields(payload = %payload)
 )]
 async fn get_patient(payload: web::Path<String>) -> HttpResponse {
@@ -80,7 +79,7 @@ async fn list_patients(query: web::Query<models::PaginationQuery>) -> HttpRespon
             HttpResponse::Ok().json(patients)
         }
         Err(e) => {
-            error!(error = %e, "Failed to list patients");
+            error!(error = %e, error_debug = ?e, "Failed to list patients");
             HttpResponse::InternalServerError().finish()
         }
     }
@@ -112,17 +111,17 @@ async fn delete_patient(path: web::Path<String>) -> HttpResponse {
     }
 }
 
-#[put("/{id}")]
-async fn update_patient(path: web::Path<String>) -> HttpResponse {
-    let span = info_span!("update_patient", service.name = "patient_service");
-    let _guard = span.enter();
-
-    let id = path.into_inner();
-    info!("Updating patient handler with id {}", id);
-
-    // TODO: modify
-    HttpResponse::Ok().body("updated patient handler")
-}
+// #[put("/{id}")]
+// async fn update_patient(path: web::Path<String>) -> HttpResponse {
+//     let span = info_span!("update_patient", service.name = "patient_service");
+//     let _guard = span.enter();
+//
+//     let id = path.into_inner();
+//     info!("Updating patient handler with id {}", id);
+//
+//     // TODO: modify
+//     HttpResponse::Ok().body("updated patient handler")
+// }
 
 // this handler updates the Insurance information for a Patient
 #[put("/{id}/insurance")]
@@ -169,6 +168,31 @@ async fn update_patient_medical_alerts(
         }
         Err(e) => {
             error!(error = %e, "Failed to update medical alerts");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+// this handler updates the Contact Info for a Patient
+#[put("/{id}/contact")]
+async fn update_patient_contact_info(
+    path: web::Path<String>,
+    payload: web::Json<models::UpdateContactInfoDto>,
+) -> HttpResponse {
+    let id = path.into_inner();
+    info!("Updating contact info for patient ID: {}", id);
+
+    match repository::update_patient_contact_info(id, payload.into_inner()).await {
+        Ok(true) => {
+            info!("Contact info updated successfully");
+            HttpResponse::Ok().finish()
+        }
+        Ok(false) => {
+            debug!("Patient not found or inactive");
+            HttpResponse::NotFound().finish()
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to update contact info");
             HttpResponse::InternalServerError().finish()
         }
     }

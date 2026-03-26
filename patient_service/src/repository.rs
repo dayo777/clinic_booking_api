@@ -6,17 +6,16 @@
 
 use crate::models::{
     ContactInfo, CreatePatientDto, PaginationQuery, PatientDto, PatientResponseDto,
-    UpdateInsuranceDto, UpdateMedicalAlertsDto,
+    UpdateContactInfoDto, UpdateInsuranceDto, UpdateMedicalAlertsDto,
 };
 use crate::utils;
-use chrono::Utc;
 use common::db::get_collection;
-use futures::StreamExt;
+use futures::stream::TryStreamExt;
+// use futures::StreamExt;
 use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::error::Error as MongodbError;
 use mongodb::options::FindOptions;
 use mongodb::results::InsertOneResult;
-use std::time::Duration;
 use tracing::{debug, info, instrument};
 
 // this is the Collection name this workspace interacts with.
@@ -48,7 +47,7 @@ pub(crate) async fn create_patient(
         medical_alerts: None,
         insurance: None,
         is_active: true,
-        created_at: Utc::now(),
+        created_at: mongodb::bson::DateTime::now(),
         updated_at: None,
         deleted_at: None,
     };
@@ -75,13 +74,10 @@ pub(crate) async fn get_single_patient(
     let filter = doc! { "_id": obj_id, "is_active": true };
 
     info!("Executing MongoDB FindOne");
-    let patient_doc = collection
-        .find_one(filter)
-        .max_time(Duration::from_secs(10))
-        .await?;
+    let patient_doc = collection.find_one(filter).await?;
 
     Ok(patient_doc.map(|p| PatientResponseDto {
-        id: p.id.map(|oid| oid.to_hex()).unwrap_or_default(),
+        id: p.id.unwrap_or_else(ObjectId::new),
         name: p.name,
         age: p.age,
         dob: p.dob,
@@ -98,13 +94,20 @@ pub(crate) async fn list_patient(
 ) -> Result<Vec<PatientResponseDto>, MongodbError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
 
-    let limit = pagination.limit.unwrap_or(15);
-    let page = pagination.page.unwrap_or(1);
+    const DEFAULT_LIMIT: u64 = 15;
+    const MAX_LIMIT: u64 = 100;
+
+    let limit = pagination
+        .limit
+        .unwrap_or(DEFAULT_LIMIT)
+        .clamp(1, MAX_LIMIT);
+    let page = pagination.page.unwrap_or(1).max(1);
     let skip = (page - 1) * limit;
 
     let find_options = FindOptions::builder()
         .limit(limit as i64)
         .skip(skip)
+        .sort(doc! { "_id": 1 })
         .build();
 
     info!(
@@ -118,10 +121,9 @@ pub(crate) async fn list_patient(
     let mut cursor = collection.find(filter).with_options(find_options).await?;
     let mut patients = Vec::new();
 
-    while let Some(result) = cursor.next().await {
-        let p = result?;
+    while let Some(p) = cursor.try_next().await? {
         patients.push(PatientResponseDto {
-            id: p.id.map(|oid| oid.to_hex()).unwrap_or_default(),
+            id: p.id.unwrap_or_else(ObjectId::new),
             name: p.name,
             age: p.age,
             dob: p.dob,
@@ -156,7 +158,7 @@ pub(crate) async fn delete_patient(patient_id: String) -> Result<bool, MongodbEr
     if let Some(mut patient) = patient_doc {
         // 2. Update status and set deletion date
         patient.is_active = false;
-        patient.deleted_at = Some(Utc::now());
+        patient.deleted_at = Some(mongodb::bson::DateTime::now());
 
         // 3. Insert into archive collection
         archive_collection.insert_one(&patient).await?;
@@ -214,8 +216,8 @@ pub(crate) async fn update_patient_insurance(
     let filter = doc! { "_id": obj_id, "is_active": true };
 
     // Ensure insurance field is an object if it's currently null or missing
-    // We use a separate update to ensure the structure is correct before applying dot-notation updates,
-    // or we can use a pipeline-style update if supported, or simply check and set.
+    // We use a separate update to ensure the structure is correct before applying dot-notation
+    // ...updates, or we can use a pipeline-style update if supported, or simply check and set.
     // Given the error "Cannot create field 'group_number' in element {insurance: null}",
     // it means insurance exists but is null.
 
@@ -275,6 +277,56 @@ pub(crate) async fn update_patient_medical_alerts(
     let _ = collection
         .update_one(filter_null, unset_null_alerts)
         .await?;
+
+    let update = doc! { "$set": update_doc };
+    let result = collection.update_one(filter, update).await?;
+
+    Ok(result.matched_count > 0)
+}
+
+#[instrument(
+    name = "db_update_patient_contact_info",
+    skip(patient_id, contact_info)
+)]
+pub(crate) async fn update_patient_contact_info(
+    patient_id: String,
+    contact_info: UpdateContactInfoDto,
+) -> Result<bool, MongodbError> {
+    let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
+
+    let obj_id = match ObjectId::parse_str(&patient_id) {
+        Ok(id) => id,
+        Err(e) => {
+            debug!("Invalid ObjectId format: {}", e);
+            return Ok(false);
+        }
+    };
+
+    let mut update_doc = doc! {};
+
+    if let Some(phone) = contact_info.phone {
+        update_doc.insert("contact.phone", phone);
+    }
+    if let Some(email) = contact_info.email {
+        update_doc.insert("contact.email", email);
+    }
+    if let Some(address) = contact_info.address {
+        update_doc.insert("contact.address", address);
+    }
+    if let Some(name) = contact_info.emergency_contact_name {
+        update_doc.insert("contact.emergency_contact_name", name);
+    }
+    if let Some(phone) = contact_info.emergency_contact_phone {
+        update_doc.insert("contact.emergency_contact_phone", phone);
+    }
+
+    if update_doc.is_empty() {
+        return Ok(true);
+    }
+
+    update_doc.insert("updated_at", mongodb::bson::DateTime::now());
+
+    let filter = doc! { "_id": obj_id, "is_active": true };
 
     let update = doc! { "$set": update_doc };
     let result = collection.update_one(filter, update).await?;

@@ -36,6 +36,7 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .bind("0.0.0.0:8080")?
+    .workers(1)
     .run()
     .await
 }

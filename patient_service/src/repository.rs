@@ -18,7 +18,7 @@ use mongodb::options::FindOptions;
 use mongodb::results::InsertOneResult;
 use tracing::{debug, info, instrument};
 
-// this is the Collection name this workspace interacts with.
+// declare Collections as represented in MongoDB collection
 static PATIENT_COLLECTION: &str = "patients_table";
 static PATIENT_DELETED_COLLECTION: &str = "patient_deleted";
 
@@ -27,7 +27,7 @@ pub(crate) async fn create_patient(
     payload: CreatePatientDto,
 ) -> Result<InsertOneResult, MongodbError> {
     let dob = payload.dob;
-    let age = utils::calculate_age(payload.dob);
+    let age = utils::calculate_age(payload.dob).unwrap_or(0);
     let contact_info = ContactInfo {
         phone: payload.contact_info.phone,
         email: payload.contact_info.email,

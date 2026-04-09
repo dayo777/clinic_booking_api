@@ -11,10 +11,30 @@ concurrency:
 
 jobs:
   test:
-    name: Run Tests
+    name: Test ${{ matrix.workspace }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          - patient_service
+          - appointment_service
+          - clinic_core
+          - clinic_service
+          - doctor_service
+          - common
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Run Workspace Tests
-        run: cargo test --workspace
+        with:
+          cache-workdir: "."
+
+      - name: Pre-pull test images
+        if: matrix.workspace == 'patient_service'
+        run: |
+          docker pull mongo:7.0
+          docker pull jaegertracing/jaeger:2.3.0
+
+      - name: Run Tests for ${{ matrix.workspace }}
+        run: cargo test -p ${{ matrix.workspace }}

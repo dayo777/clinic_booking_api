@@ -101,7 +101,7 @@ pub(crate) struct CreatePatientDto {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct PatientResponseDto {
+pub struct PatientResponseDto {
     pub(crate) id: ObjectId,
     pub(crate) name: String,
     pub(crate) age: u8,

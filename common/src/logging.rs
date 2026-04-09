@@ -3,6 +3,7 @@ use opentelemetry::KeyValue;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{Resource, trace as sdktrace};
+use std::env;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -10,13 +11,15 @@ use tracing_subscriber::util::SubscriberInitExt;
 pub fn init_tracing(service_name: &str) {
     // for prod, change the file name on line 13 to point to live config e.g. settings_prod.yaml
     let logging_config = Config::builder()
-        .add_source(config::File::with_name("settings_dev.toml"))
+        .add_source(config::File::with_name("settings_dev.toml").required(false))
         .build()
         .expect("Unable to read tracing endpoint.");
 
-    let otlp_endpoint: String = logging_config
-        .get_string("tracing.OTEL_EXPORTER_OTLP_ENDPOINT")
-        .expect("Missing OTEL_EXPORTER_OTLP_ENDPOINT setting value.");
+    let otlp_endpoint: String = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_else(|_| {
+        logging_config
+            .get_string("tracing.OTEL_EXPORTER_OTLP_ENDPOINT")
+            .expect("Missing OTEL_EXPORTER_OTLP_ENDPOINT setting value.")
+    });
     // .unwrap_or_else(|_| "http://localhost:4317".to_string());
 
     let exporter = opentelemetry_otlp::SpanExporter::builder()

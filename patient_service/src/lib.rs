@@ -3,9 +3,11 @@
 //! This crate provides the patient management functionality for the clinic booking API,
 //! including registration, retrieval, and management of patient records.
 
+// To view this service structure, use the cmd `cargo modules structure --package patient_service`
+
 mod error;
-mod handlers;
-mod models;
+pub mod handlers;
+pub mod models;
 mod repository;
 pub mod utils;
 

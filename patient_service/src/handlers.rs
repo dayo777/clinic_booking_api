@@ -5,6 +5,7 @@
 use crate::{models, repository};
 use actix_web::{HttpResponse, delete, get, post, put, web};
 use tracing::{debug, error, info, instrument};
+use validator::Validate;
 
 // existence Check (HEAD): SELECT 1 FROM patients WHERE id = 123 LIMIT 1;
 // (Fast: the database only checks the index and returns a single bit).
@@ -27,9 +28,15 @@ use tracing::{debug, error, info, instrument};
     fields(payload = %payload.name)
 )]
 pub(crate) async fn create_patient(payload: web::Json<models::CreatePatientDto>) -> HttpResponse {
-    info!("Processing new patient registration");
+    info!("Processing new patient registration for: {}", payload.name);
 
-    match repository::create_patient(payload.into_inner()).await {
+    if let Err(e) = payload.validate() {
+        error!("Validation failed for patient {}: {:?}", payload.name, e);
+        return HttpResponse::BadRequest().body(format!("Validation failed: {:?}", e));
+    }
+
+    let dto = payload.into_inner();
+    match repository::create_patient(dto).await {
         Ok(_) => {
             info!("Registration successful");
             HttpResponse::Created().finish()

@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::{GenericImage, runners::AsyncRunner};
 
+#[allow(dead_code)]
 pub struct TestEnv {
     pub mongodb_uri: String,
     pub mongodb_database: String,
@@ -28,7 +29,7 @@ pub async fn setup_test_env() -> &'static TestEnv {
                 .get_host_port_ipv4(27017.tcp())
                 .await
                 .expect("failed to read mongodb mapped port");
-            let mongodb_uri = format!("mongodb://localhost:{mongodb_port}");
+            let mongodb_uri = format!("mongodb://127.0.0.1:{mongodb_port}");
 
             let jaeger_container = GenericImage::new("jaegertracing/jaeger", "2.14.1")
                 .with_exposed_port(4317.tcp())
@@ -44,7 +45,7 @@ pub async fn setup_test_env() -> &'static TestEnv {
                 .get_host_port_ipv4(4317.tcp())
                 .await
                 .expect("failed to read jaeger mapped port");
-            let otlp_endpoint = format!("http://localhost:{jaeger_port}");
+            let otlp_endpoint = format!("http://127.0.0.1:{jaeger_port}");
 
             // Keep containers alive for the entire test process lifetime.
             std::mem::forget(mongodb_container);

@@ -8,7 +8,7 @@
 mod error;
 pub mod handlers;
 pub mod models;
-mod repository;
+pub mod repository;
 pub mod utils;
 
 use actix_web::{HttpResponse, guard, web};

@@ -10,7 +10,6 @@ mod patient_service_handler_test {
         http::{self, header::ContentType},
         test,
     };
-    use patient_service::handlers;
     use serde_json::json;
 
     async fn setup_integration_test() {
@@ -29,7 +28,7 @@ mod patient_service_handler_test {
         let req_data = json!({
             "name": "Enya",
             "dob": "1961-05-17",
-            "gender": "Female",
+            "gender": "female",
             "contact_info": {
                 "phone": "+44-348-2992",
                 "email": "enya@bookings.com",

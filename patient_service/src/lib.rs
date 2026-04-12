@@ -3,16 +3,20 @@
 //! This crate provides the patient management functionality for the clinic booking API,
 //! including registration, retrieval, and management of patient records.
 
+// To view this service structure, use the cmd `cargo modules structure --package patient_service`
+
 mod error;
-mod handlers;
-mod models;
-mod repository;
+pub mod handlers;
+pub mod models;
+pub mod repository;
 pub mod utils;
 
 use actix_web::{HttpResponse, guard, web};
 
 pub fn patient_config_v1(cfg: &mut web::ServiceConfig) {
     tracing::info!("The patient service is starting");
+    // Ensure DB is initialized before first request if not already
+    // (Note: in production this is called in main, in tests we call it in setup)
     cfg.service(
         web::scope("/patient")
             .service(handlers::create_patient)

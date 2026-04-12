@@ -5,6 +5,7 @@
 use crate::{models, repository};
 use actix_web::{HttpResponse, delete, get, post, put, web};
 use tracing::{debug, error, info, instrument};
+use validator::Validate;
 
 // existence Check (HEAD): SELECT 1 FROM patients WHERE id = 123 LIMIT 1;
 // (Fast: the database only checks the index and returns a single bit).
@@ -26,10 +27,16 @@ use tracing::{debug, error, info, instrument};
     skip(payload),
     fields(payload = %payload.name)
 )]
-async fn create_patient(payload: web::Json<models::CreatePatientDto>) -> HttpResponse {
-    info!("Processing new patient registration");
+pub(crate) async fn create_patient(payload: web::Json<models::CreatePatientDto>) -> HttpResponse {
+    info!("Processing new patient registration for: {}", payload.name);
 
-    match repository::create_patient(payload.into_inner()).await {
+    if let Err(e) = payload.validate() {
+        error!("Validation failed for patient {}: {:?}", payload.name, e);
+        return HttpResponse::BadRequest().body(format!("Validation failed: {:?}", e));
+    }
+
+    let dto = payload.into_inner();
+    match repository::create_patient(dto).await {
         Ok(_) => {
             info!("Registration successful");
             HttpResponse::Created().finish()
@@ -41,12 +48,13 @@ async fn create_patient(payload: web::Json<models::CreatePatientDto>) -> HttpRes
     }
 }
 
+// retrieve a single patient
 #[get("/{id}")]
 #[instrument(
     name = "get_patient_request",
     fields(payload = %payload)
 )]
-async fn get_patient(payload: web::Path<String>) -> HttpResponse {
+pub(crate) async fn get_patient(payload: web::Path<String>) -> HttpResponse {
     info!("Retrieving patient information");
 
     match repository::get_single_patient(payload.into_inner()).await {
@@ -55,7 +63,7 @@ async fn get_patient(payload: web::Path<String>) -> HttpResponse {
             HttpResponse::Ok().json(patient)
         }
         Ok(None) => {
-            debug!("Patient not found");
+            info!("Patient not found");
             HttpResponse::NotFound().finish()
         }
         Err(e) => {
@@ -70,7 +78,7 @@ async fn get_patient(payload: web::Path<String>) -> HttpResponse {
 // partial parameters: /patients?page=3
 #[get("")]
 #[instrument(name = "list_patients_request", skip(query))]
-async fn list_patients(query: web::Query<models::PaginationQuery>) -> HttpResponse {
+pub(crate) async fn list_patients(query: web::Query<models::PaginationQuery>) -> HttpResponse {
     info!("Processing list patient");
 
     match repository::list_patient(query.into_inner()).await {
@@ -85,13 +93,13 @@ async fn list_patients(query: web::Query<models::PaginationQuery>) -> HttpRespon
     }
 }
 
-// patient data is never deleted, moved to another Collection
+// patient data is never deleted, moved to another Collection named `patient_deleted`
 #[delete("/{id}")]
 #[instrument(
     name = "delete_patient_request",
     fields(id = %path)
 )]
-async fn delete_patient(path: web::Path<String>) -> HttpResponse {
+pub(crate) async fn delete_patient(path: web::Path<String>) -> HttpResponse {
     let id = path.into_inner();
     info!("Processing patient deletion for ID: {}", id);
 
@@ -125,12 +133,17 @@ async fn delete_patient(path: web::Path<String>) -> HttpResponse {
 
 // this handler updates the Insurance information for a Patient
 #[put("/{id}/insurance")]
-async fn update_patient_insurance(
+pub(crate) async fn update_patient_insurance(
     path: web::Path<String>,
     payload: web::Json<models::UpdateInsuranceDto>,
 ) -> HttpResponse {
     let id = path.into_inner();
     info!("Updating insurance for patient ID: {}", id);
+
+    if let Err(e) = payload.validate() {
+        error!("Validation failed for patient ID {}: {:?}", id, e);
+        return HttpResponse::BadRequest().body(format!("Validation failed: {:?}", e));
+    }
 
     match repository::update_patient_insurance(id, payload.into_inner()).await {
         Ok(true) => {
@@ -150,12 +163,17 @@ async fn update_patient_insurance(
 
 // this handler updates the Medical Alerts for a Patient
 #[put("/{id}/medical-alerts")]
-async fn update_patient_medical_alerts(
+pub(crate) async fn update_patient_medical_alerts(
     path: web::Path<String>,
     payload: web::Json<models::UpdateMedicalAlertsDto>,
 ) -> HttpResponse {
     let id = path.into_inner();
     info!("Updating medical alerts for patient ID: {}", id);
+
+    if let Err(e) = payload.validate() {
+        error!("Validation failed for patient ID {}: {:?}", id, e);
+        return HttpResponse::BadRequest().body(format!("Validation failed: {:?}", e));
+    }
 
     match repository::update_patient_medical_alerts(id, payload.into_inner()).await {
         Ok(true) => {
@@ -175,12 +193,17 @@ async fn update_patient_medical_alerts(
 
 // this handler updates the Contact Info for a Patient
 #[put("/{id}/contact")]
-async fn update_patient_contact_info(
+pub(crate) async fn update_patient_contact_info(
     path: web::Path<String>,
     payload: web::Json<models::UpdateContactInfoDto>,
 ) -> HttpResponse {
     let id = path.into_inner();
     info!("Updating contact info for patient ID: {}", id);
+
+    if let Err(e) = payload.validate() {
+        error!("Validation failed for patient ID {}: {:?}", id, e);
+        return HttpResponse::BadRequest().body(format!("Validation failed: {:?}", e));
+    }
 
     match repository::update_patient_contact_info(id, payload.into_inner()).await {
         Ok(true) => {
@@ -198,6 +221,7 @@ async fn update_patient_contact_info(
     }
 }
 
-// other possible endpoints
+// TODO: other possible endpoints
 // /{id}/appointments  -- get all appointments for this patient
 // /{id}/status  -- check if patient is active or archived (deleted)
+// use the function on line-9 above to confirm Patient Status

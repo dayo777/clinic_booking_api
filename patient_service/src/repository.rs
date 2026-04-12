@@ -18,16 +18,18 @@ use mongodb::options::FindOptions;
 use mongodb::results::InsertOneResult;
 use tracing::{debug, info, instrument};
 
-// this is the Collection name this workspace interacts with.
+// declare Collections as represented in MongoDB collection
 static PATIENT_COLLECTION: &str = "patients_table";
 static PATIENT_DELETED_COLLECTION: &str = "patient_deleted";
 
 #[instrument(name = "db_create_patient", skip(payload))]
-pub(crate) async fn create_patient(
-    payload: CreatePatientDto,
-) -> Result<InsertOneResult, MongodbError> {
+pub async fn create_patient(payload: CreatePatientDto) -> Result<InsertOneResult, MongodbError> {
+    info!(
+        "db_create_patient: Creating patient with name: {}",
+        payload.name
+    );
     let dob = payload.dob;
-    let age = utils::calculate_age(payload.dob);
+    let age = utils::calculate_age(payload.dob).unwrap_or(0);
     let contact_info = ContactInfo {
         phone: payload.contact_info.phone,
         email: payload.contact_info.email,
@@ -58,7 +60,7 @@ pub(crate) async fn create_patient(
 }
 
 #[instrument(name = "db_get_patient", skip(patient_id))]
-pub(crate) async fn get_single_patient(
+pub async fn get_single_patient(
     patient_id: String,
 ) -> Result<Option<PatientResponseDto>, MongodbError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
@@ -89,7 +91,7 @@ pub(crate) async fn get_single_patient(
 }
 
 #[instrument(name = "db_list_patients", skip(pagination))]
-pub(crate) async fn list_patient(
+pub async fn list_patient(
     pagination: PaginationQuery,
 ) -> Result<Vec<PatientResponseDto>, MongodbError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
@@ -138,7 +140,7 @@ pub(crate) async fn list_patient(
 }
 
 #[instrument(name = "db_delete_patient", skip(patient_id))]
-pub(crate) async fn delete_patient(patient_id: String) -> Result<bool, MongodbError> {
+pub async fn delete_patient(patient_id: String) -> Result<bool, MongodbError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
     let archive_collection = get_collection::<PatientDto>(PATIENT_DELETED_COLLECTION);
 
@@ -178,7 +180,7 @@ pub(crate) async fn delete_patient(patient_id: String) -> Result<bool, MongodbEr
 }
 
 #[instrument(name = "db_update_patient_insurance", skip(patient_id, insurance))]
-pub(crate) async fn update_patient_insurance(
+pub async fn update_patient_insurance(
     patient_id: String,
     insurance: UpdateInsuranceDto,
 ) -> Result<bool, MongodbError> {
@@ -234,7 +236,7 @@ pub(crate) async fn update_patient_insurance(
 }
 
 #[instrument(name = "db_update_patient_medical_alerts", skip(patient_id, alerts))]
-pub(crate) async fn update_patient_medical_alerts(
+pub async fn update_patient_medical_alerts(
     patient_id: String,
     alerts: UpdateMedicalAlertsDto,
 ) -> Result<bool, MongodbError> {
@@ -288,7 +290,7 @@ pub(crate) async fn update_patient_medical_alerts(
     name = "db_update_patient_contact_info",
     skip(patient_id, contact_info)
 )]
-pub(crate) async fn update_patient_contact_info(
+pub async fn update_patient_contact_info(
     patient_id: String,
     contact_info: UpdateContactInfoDto,
 ) -> Result<bool, MongodbError> {

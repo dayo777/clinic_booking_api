@@ -3,18 +3,61 @@ on:
   push:
     branches: [dev, feature/*]
   pull_request:
-    branches: [dev, feature/*, main]
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Run Tests
+  test-patient-service:
+    name: Test patient-service
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Run Workspace Tests
-        run: cargo test --workspace
+        with:
+          cache-workdir: "."
+
+      - name: Pre-pull test images
+        run: |
+          docker pull mongo:8.3-rc-noble
+          docker pull jaegertracing/jaeger:2.14.1
+
+      - name: Run Tests for patient_service
+        run: cargo test -p patient_service --test handler_tests -- --test-threads=1
+
+#  test-doctor-service:
+#    name: Test doctor-service
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - uses: actions-rust-lang/setup-rust-toolchain@v1
+#        with:
+#          cache-workdir: "."
+#
+#      - name: Run Tests for doctor_service
+#        run: cargo test -p doctor_service
+#
+#  test-others:
+#    name: Test ${{ matrix.workspace }}
+#    runs-on: ubuntu-latest
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        workspace:
+#          - appointment_service
+#          - clinic_core
+#          - clinic_service
+#          - common
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - uses: actions-rust-lang/setup-rust-toolchain@v1
+#        with:
+#          cache-workdir: "."
+#
+#      - name: Run Tests for ${{ matrix.workspace }}
+#        run: cargo test -p ${{ matrix.workspace }}

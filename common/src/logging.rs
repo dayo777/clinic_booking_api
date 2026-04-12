@@ -15,40 +15,46 @@ pub fn init_tracing(service_name: &str) {
         .build()
         .expect("Unable to read tracing endpoint.");
 
-    let otlp_endpoint: String = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_else(|_| {
-        logging_config
+    let otlp_endpoint: Option<String> = match env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
+        Ok(v) => Some(v),
+        Err(_) => logging_config
             .get_string("tracing.OTEL_EXPORTER_OTLP_ENDPOINT")
-            .expect("Missing OTEL_EXPORTER_OTLP_ENDPOINT setting value.")
-    });
-    // .unwrap_or_else(|_| "http://localhost:4317".to_string());
+            .ok(),
+    };
 
-    let exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_tonic()
-        .with_endpoint(otlp_endpoint)
-        .build()
-        .expect("Failed to build exporter");
+    if let Some(endpoint) = otlp_endpoint {
+        let exporter = opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
+            .with_endpoint(endpoint)
+            .build()
+            .expect("Failed to build exporter");
 
-    // we set the
-    let provider = sdktrace::SdkTracerProvider::builder()
-        .with_batch_exporter(exporter)
-        .with_resource(
-            Resource::builder_empty()
-                .with_attributes(vec![KeyValue::new(
-                    "service.name",
-                    service_name.to_string(),
-                )])
-                .build(),
-        )
-        .build();
+        let provider = sdktrace::SdkTracerProvider::builder()
+            .with_batch_exporter(exporter)
+            .with_resource(
+                Resource::builder_empty()
+                    .with_attributes(vec![KeyValue::new(
+                        "service.name",
+                        service_name.to_string(),
+                    )])
+                    .build(),
+            )
+            .build();
 
-    let tracer = provider.tracer("clinic_booking");
+        let tracer = provider.tracer("clinic_booking");
+        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-
-    tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
-        .with(telemetry)
-        .with(tracing_subscriber::fmt::layer())
-        .try_init()
-        .expect("Failed to init tracing subsystem.");
+        tracing_subscriber::registry()
+            .with(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
+            .with(telemetry)
+            .with(tracing_subscriber::fmt::layer())
+            .try_init()
+            .expect("Failed to init tracing subsystem.");
+    } else {
+        tracing_subscriber::registry()
+            .with(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
+            .with(tracing_subscriber::fmt::layer())
+            .try_init()
+            .expect("Failed to init tracing subsystem.");
+    }
 }

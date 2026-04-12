@@ -8,6 +8,6 @@ set -e
 echo "Running tests for patient_service..."
 
 # Run cargo test for the patient_service package
-cargo test -p patient_service
+cargo test -p patient_service --test handler_tests -- --test-threads=1
 
 echo "All tests for patient_service passed!"

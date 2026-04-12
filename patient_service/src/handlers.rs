@@ -140,6 +140,11 @@ pub(crate) async fn update_patient_insurance(
     let id = path.into_inner();
     info!("Updating insurance for patient ID: {}", id);
 
+    if let Err(e) = payload.validate() {
+        error!("Validation failed for patient ID {}: {:?}", id, e);
+        return HttpResponse::BadRequest().body(format!("Validation failed: {:?}", e));
+    }
+
     match repository::update_patient_insurance(id, payload.into_inner()).await {
         Ok(true) => {
             info!("Insurance updated successfully");
@@ -165,6 +170,11 @@ pub(crate) async fn update_patient_medical_alerts(
     let id = path.into_inner();
     info!("Updating medical alerts for patient ID: {}", id);
 
+    if let Err(e) = payload.validate() {
+        error!("Validation failed for patient ID {}: {:?}", id, e);
+        return HttpResponse::BadRequest().body(format!("Validation failed: {:?}", e));
+    }
+
     match repository::update_patient_medical_alerts(id, payload.into_inner()).await {
         Ok(true) => {
             info!("Medical alerts updated successfully");
@@ -189,6 +199,11 @@ pub(crate) async fn update_patient_contact_info(
 ) -> HttpResponse {
     let id = path.into_inner();
     info!("Updating contact info for patient ID: {}", id);
+
+    if let Err(e) = payload.validate() {
+        error!("Validation failed for patient ID {}: {:?}", id, e);
+        return HttpResponse::BadRequest().body(format!("Validation failed: {:?}", e));
+    }
 
     match repository::update_patient_contact_info(id, payload.into_inner()).await {
         Ok(true) => {

@@ -5,12 +5,41 @@ use mongodb::{Client, Collection, Database};
 use once_cell::sync::OnceCell;
 use std::env;
 
-static DB: OnceCell<Database> = OnceCell::new();
+use std::sync::RwLock;
 
-    // this Database init function should be called once in main
+static DB: OnceCell<Database> = OnceCell::new();
+static TEST_DB_LOCK: OnceCell<RwLock<Option<Database>>> = OnceCell::new();
+
+fn get_test_db_lock() -> &'static RwLock<Option<Database>> {
+    TEST_DB_LOCK.get_or_init(|| RwLock::new(None))
+}
+
+// this Database init function should be called once in main
 pub async fn init_db() {
-    if let Some(db) = DB.get() {
-        println!("DB already initialized. Using existing database: {}", db.name());
+    let test_lock = get_test_db_lock();
+    let db = {
+        let read_guard = test_lock.read().unwrap();
+        read_guard.clone()
+    };
+    if let Some(db) = db {
+        // Check if connection is still alive
+        if db
+            .run_command(mongodb::bson::doc! {"ping": 1})
+            .await
+            .is_ok()
+        {
+            return;
+        }
+    }
+
+    if DB.get().is_some()
+        && DB
+            .get()
+            .unwrap()
+            .run_command(mongodb::bson::doc! {"ping": 1})
+            .await
+            .is_ok()
+    {
         return;
     }
     let db_config = Config::builder()
@@ -37,11 +66,14 @@ pub async fn init_db() {
     // Direct connection can sometimes cause issues in complex environments
     // client_options.direct_connection = Some(true);
 
-    let client = Client::with_options(client_options)
-        .expect("Unable to create MongoDB client from options");
+    let client =
+        Client::with_options(client_options).expect("Unable to create MongoDB client from options");
 
     // Ping the database to ensure connection is established
-    println!("Initializing DB with URI: {} and Database: {}", uri, db_name);
+    println!(
+        "Initializing DB with URI: {} and Database: {}",
+        uri, db_name
+    );
     client
         .database("admin")
         .run_command(mongodb::bson::doc! {"ping": 1})
@@ -50,18 +82,37 @@ pub async fn init_db() {
     println!("DB Ping successful");
 
     let database = client.database(&db_name);
-    let _ = DB.set(database);
+
+    // In test mode, we store the DB in the lock.
+    {
+        let mut write_guard = test_lock.write().unwrap();
+        *write_guard = Some(database.clone());
+    }
+
+    // We also set the global DB if not already set.
+    if DB.get().is_none() {
+        let _ = DB.set(database.clone());
+    }
 }
 
-/// Reset the DB OnceCell. ONLY FOR TESTING.
-#[cfg(test)]
+/// Reset the DB. ONLY FOR TESTING.
 pub fn reset_db_for_test() {
-    // There is no safe way to reset OnceCell, but for tests we can use a workaround
-    // if we really needed to. However, it's better to just ensure it's initialized once.
+    #[cfg(test)]
+    {
+        let lock = get_test_db_lock();
+        let mut write_guard = lock.write().unwrap();
+        *write_guard = None;
+    }
 }
 
 // this function can be shared with other workspaces to access the MongoDB instance
 pub fn get_collection<T: Send + Sync>(col_name: &str) -> Collection<T> {
+    let lock = get_test_db_lock();
+    let guard = lock.read().unwrap();
+    if let Some(db) = &*guard {
+        return db.collection::<T>(col_name);
+    }
+
     let db = DB.get().expect("DB not initialized! Call init_db first.");
     db.collection::<T>(col_name)
 }

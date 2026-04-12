@@ -121,13 +121,13 @@ pub struct PaginationQuery {
 #[derive(Serialize, Deserialize, Debug, EnumString, Display, Clone, Copy)]
 pub enum Gender {
     #[strum(serialize = "male")]
-    #[serde(rename = "male")]
+    #[serde(rename = "male", alias = "Male")]
     Male,
     #[strum(serialize = "female")]
-    #[serde(rename = "female")]
+    #[serde(rename = "female", alias = "Female")]
     Female,
     #[strum(serialize = "other")]
-    #[serde(rename = "other")]
+    #[serde(rename = "other", alias = "Other")]
     Other,
 }
 
@@ -177,8 +177,11 @@ pub struct UpdateMedicalAlertsDto {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateContactInfoDto {
+    #[validate(length(min = 5))]
     pub phone: Option<String>,
+    #[validate(email)]
     pub email: Option<String>,
+    #[validate(length(min = 1, max = 150))]
     pub address: Option<String>,
     pub emergency_contact_name: Option<String>,
     pub emergency_contact_phone: Option<String>,

@@ -23,10 +23,11 @@ static PATIENT_COLLECTION: &str = "patients_table";
 static PATIENT_DELETED_COLLECTION: &str = "patient_deleted";
 
 #[instrument(name = "db_create_patient", skip(payload))]
-pub async fn create_patient(
-    payload: CreatePatientDto,
-) -> Result<InsertOneResult, MongodbError> {
-    info!("db_create_patient: Creating patient with name: {}", payload.name);
+pub async fn create_patient(payload: CreatePatientDto) -> Result<InsertOneResult, MongodbError> {
+    info!(
+        "db_create_patient: Creating patient with name: {}",
+        payload.name
+    );
     let dob = payload.dob;
     let age = utils::calculate_age(payload.dob).unwrap_or(0);
     let contact_info = ContactInfo {

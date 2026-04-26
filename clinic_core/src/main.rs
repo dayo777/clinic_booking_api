@@ -6,7 +6,6 @@ use tracing_actix_web::TracingLogger;
 
 // import Route configs below
 use appointment_service::appointment_config_v1;
-use clinic_service::clinic_config_v1;
 use doctor_service::doctor_config_v1;
 use patient_service::patient_config_v1;
 
@@ -30,7 +29,6 @@ async fn main() -> std::io::Result<()> {
                     .guard(ApiVersion("1".to_string()))
                     .configure(appointment_config_v1)
                     .configure(doctor_config_v1)
-                    .configure(clinic_config_v1)
                     .configure(patient_config_v1)
                     .route("", web::get().to(hello)),
             )

@@ -13,7 +13,7 @@ thiserror = { workspace = true }
 validator = { workspace = true }
 strum = { workspace = true }
 chrono = { workspace = true }
-common = { path = "../common" } # import the DB helper from here
+common = { path = "../common" } # internal workspace import
 
 [dev-dependencies]
 testcontainers = { version = "0.27.2", features = ["blocking"] }

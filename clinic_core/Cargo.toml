@@ -10,7 +10,6 @@ tracing = { workspace = true }
 mongodb = { workspace = true }
 # import internally libraries below, and Rust crates above
 appointment_service = { path = "../appointment_service"}
-clinic_service = { path = "../clinic_service"}
 doctor_service = { path = "../doctor_service"}
 patient_service = { path = "../patient_service"}
 common = { path = "../common" } # contains all shared services like DB, logging etc

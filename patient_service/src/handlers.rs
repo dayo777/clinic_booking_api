@@ -1,6 +1,4 @@
-//! HTTP request handlers for the patient service.
-//!
-//! module contains the Actix-web route handlers for CRUD operations on patient resources.
+// HTTP request handlers for the patient service.
 
 use crate::{models, repository};
 use actix_web::{HttpResponse, delete, get, post, put, web};
@@ -32,17 +30,17 @@ pub(crate) async fn create_patient(payload: web::Json<models::CreatePatientDto>)
 
     if let Err(e) = payload.validate() {
         error!("Validation failed for patient {}: {:?}", payload.name, e);
-        return HttpResponse::BadRequest().body(format!("Validation failed: {:?}", e));
+        return HttpResponse::BadRequest().body("Failed to create save new patient details.");
     }
 
     let dto = payload.into_inner();
     match repository::create_patient(dto).await {
         Ok(_) => {
-            info!("Registration successful");
+            info!("Patient registration successful");
             HttpResponse::Created().finish()
         }
         Err(e) => {
-            error!(error = %e, "Registration failed");
+            error!(error = %e, "Patient registration failed");
             HttpResponse::InternalServerError().finish()
         }
     }

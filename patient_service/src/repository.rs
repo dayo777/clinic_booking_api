@@ -41,7 +41,7 @@ pub async fn create_patient(payload: CreatePatientDto) -> Result<InsertOneResult
 
     let new_patient = PatientDto {
         id: None,
-        name: payload.name,
+        name: payload.name.clone(),
         age,
         dob,
         gender,
@@ -55,7 +55,8 @@ pub async fn create_patient(payload: CreatePatientDto) -> Result<InsertOneResult
     };
 
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
-    info!("Executing MongoDB insert one.");
+    // should probably use a proper identifier, but this should do as an example
+    info!("Inserting new patient into DB for name: {}", payload.name);
     collection.insert_one(new_patient).await
 }
 
@@ -158,14 +159,14 @@ pub async fn delete_patient(patient_id: String) -> Result<bool, MongodbError> {
     let patient_doc = collection.find_one(filter.clone()).await?;
 
     if let Some(mut patient) = patient_doc {
-        // 2. Update status and set deletion date
+        // 2. Update the status and set the deletion date
         patient.is_active = false;
         patient.deleted_at = Some(mongodb::bson::DateTime::now());
 
-        // 3. Insert into archive collection
+        // 3. Insert into the archive collection
         archive_collection.insert_one(&patient).await?;
 
-        // 4. Remove from active collection
+        // 4. Remove from the active collection
         collection.delete_one(filter).await?;
 
         info!(
@@ -217,9 +218,10 @@ pub async fn update_patient_insurance(
 
     let filter = doc! { "_id": obj_id, "is_active": true };
 
-    // Ensure insurance field is an object if it's currently null or missing
+    // Ensure the insurance field is an object if it's currently null or missing
     // We use a separate update to ensure the structure is correct before applying dot-notation
-    // ...updates, or we can use a pipeline-style update if supported, or simply check and set.
+    // updates, or we can use a pipeline-style update if supported, or simply check and set
+
     // Given the error "Cannot create field 'group_number' in element {insurance: null}",
     // it means insurance exists but is null.
 

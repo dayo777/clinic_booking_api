@@ -1,4 +1,4 @@
-// MongoDB & Jaeger instances for testing is initialized here
+// set up the environment for testing in this module
 use std::time::{SystemTime, UNIX_EPOCH};
 use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::{ContainerAsync, GenericImage, runners::AsyncRunner};
@@ -47,12 +47,13 @@ pub async fn setup_test_env() -> &'static TestEnv {
                 .get_host_port_ipv4(4317.tcp())
                 .await
                 .expect("failed to read jaeger mapped port");
+
             let otlp_endpoint = format!("http://127.0.0.1:{jaeger_port}");
 
-            // retrieve the system time, & append to DB name so that each DB instance name is different
+            // retrieve the system-time, & append to DB name so that each DB instance name is different
             let test_run_suffix = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .expect("system time before unix epoch")
+                .expect("system time before Unix epoch")
                 .as_millis();
             let mongodb_database = format!("clinic_booking_api_test_{test_run_suffix}");
 

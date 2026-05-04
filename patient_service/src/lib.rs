@@ -19,6 +19,7 @@ pub fn patient_config_v1(cfg: &mut web::ServiceConfig) {
     // (Note: in production this is called in main, in tests we call it in setup)
     cfg.service(
         web::scope("/patient")
+            .service(handlers::check_patient_exists)
             .service(handlers::create_patient)
             .service(handlers::get_patient)
             .service(handlers::list_patients)

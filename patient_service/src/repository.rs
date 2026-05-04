@@ -91,6 +91,23 @@ pub async fn get_single_patient(
     }))
 }
 
+#[instrument(name = "db_patient_exists", skip(patient_id))]
+pub async fn patient_exists(patient_id: String) -> bool {
+    let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
+
+    let obj_id = match ObjectId::parse_str(&patient_id) {
+        Ok(id) => id,
+        Err(_) => return false,
+    };
+
+    let filter = doc! { "_id": obj_id, "is_active": true };
+
+    match collection.count_documents(filter).await {
+        Ok(count) => count > 0,
+        Err(_) => false,
+    }
+}
+
 #[instrument(name = "db_list_patients", skip(pagination))]
 pub async fn list_patient(
     pagination: PaginationQuery,

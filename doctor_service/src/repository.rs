@@ -1,10 +1,13 @@
 // Database operations: insert, find_by_id, find_by_email, etc.
-use crate::models::{CreateDoctorDto, DoctorDto};
+use crate::models::{CreateDoctorDto, DoctorDto, DoctorResponseDto, PaginationQuery};
 use crate::utils;
 use common::db::get_collection;
+use futures::stream::TryStreamExt;
+use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::error::Error as MongodbError;
+use mongodb::options::FindOptions;
 use mongodb::results::InsertOneResult;
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument};
 
 // declare collections as represented in MongoDB here
 static DOCTOR_COLLECTION: &str = "doctors_collection"; //used `collection` instead of table
@@ -39,7 +42,9 @@ pub async fn create_doctor(payload: CreateDoctorDto) -> Result<InsertOneResult, 
         schedule: None,
         created_at: mongodb::bson::DateTime::now(),
         updated_at: None,
-        active: false,
+        // new doctor object is auto set 'is_active' to false
+        // there is a separate endpoint to make is_active
+        is_active: false,
     };
 
     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
@@ -48,4 +53,159 @@ pub async fn create_doctor(payload: CreateDoctorDto) -> Result<InsertOneResult, 
         payload.license_num
     );
     collection.insert_one(new_doctor).await
+}
+
+#[instrument(name = "db_get_doctor", skip(doctor_id))]
+pub async fn get_doctor(doctor_id: String) -> Result<Option<DoctorResponseDto>, MongodbError> {
+    let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
+
+    let obj_id = match ObjectId::parse_str(&doctor_id) {
+        Ok(id) => id,
+        Err(e) => {
+            debug!("Invalid ObjectId format: {}", e);
+            return Ok(None);
+        }
+    };
+
+    let filter = doc! { "_id": obj_id, "is_active": true };
+
+    info!("Executing MongoDB FindOne");
+    let doctor_doc = collection.find_one(filter).await?;
+
+    Ok(doctor_doc.map(|d| DoctorResponseDto {
+        id: d.id.unwrap_or_else(ObjectId::new),
+        name: d.name,
+        specialties: d.specialties,
+        license_num: d.license_num,
+        is_active: d.is_active,
+    }))
+}
+
+#[instrument(name = "db_list_doctors", skip(pagination))]
+pub async fn list_doctor(
+    pagination: PaginationQuery,
+) -> Result<Vec<DoctorResponseDto>, MongodbError> {
+    let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
+    const DEFAULT_LIMIT: u64 = 15;
+    const MAX_LIMIT: u64 = 100;
+
+    let limit = pagination
+        .limit
+        .unwrap_or(DEFAULT_LIMIT)
+        .clamp(1, MAX_LIMIT);
+    let page = pagination.page.unwrap_or(1).max(1);
+    let skip = (page - 1) * limit;
+
+    let find_options = FindOptions::builder()
+        .limit(limit as i64)
+        .skip(skip)
+        .sort(doc! { "_id": 1 })
+        .build();
+
+    info!(
+        limit = limit,
+        page = page,
+        skip = skip,
+        "Executing MongoDB Find for doctor list"
+    );
+
+    let filter = doc! { "is_active": true};
+    let mut cursor = collection.find(filter).with_options(find_options).await?;
+    let mut doctors = Vec::new();
+
+    while let Some(d) = cursor.try_next().await? {
+        doctors.push(DoctorResponseDto {
+            id: d.id.unwrap_or_else(ObjectId::new),
+            name: d.name,
+            specialties: d.specialties,
+            license_num: d.license_num,
+            is_active: d.is_active,
+        });
+    }
+
+    Ok(doctors)
+}
+
+#[instrument(name = "db_delete_doctor", fields(doctor_id = %doctor_id))]
+pub async fn delete_doctor(doctor_id: String) -> Result<bool, MongodbError> {
+    let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
+
+    let obj_id = match ObjectId::parse_str(&doctor_id) {
+        Ok(id) => id,
+        Err(e) => {
+            debug!("Invalid ObjectId format: {}", e);
+            return Ok(false);
+        }
+    };
+
+    let filter = doc! { "_id": obj_id };
+    let doctor_doc = collection.find_one(filter.clone()).await?;
+
+    // this ensures the Data exist before working on it
+    if let Some(mut _doctor) = doctor_doc {
+        let modified_content = doc! {
+            "$set": {
+                "is_active": false,
+                "updated_at": mongodb::bson::DateTime::now(),
+            }
+        };
+
+        collection.update_one(filter, modified_content).await?;
+
+        info!("Doctor status changed to in_active: {}", doctor_id);
+        Ok(true)
+    } else {
+        debug!("Doctor not found or inis_active: {}", doctor_id);
+        Ok(false)
+    }
+}
+
+#[instrument(name = "db_enable_doctor", fields(doctor_id = %doctor_id))]
+pub async fn enable_doctor(doctor_id: String) -> Result<bool, MongodbError> {
+    let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
+
+    let obj_id = match ObjectId::parse_str(&doctor_id) {
+        Ok(id) => id,
+        Err(e) => {
+            debug!("Invalid ObjectId format: {}", e);
+            return Ok(false);
+        }
+    };
+
+    let filter = doc! { "_id": obj_id };
+    let doctor_doc = collection.find_one(filter.clone()).await?;
+
+    if let Some(mut _doctor) = doctor_doc {
+        let modified_content = doc! {
+            "$set": {
+                "is_active": true,
+                "updated_at": mongodb::bson::DateTime::now(),
+            }
+        };
+
+        collection.update_one(filter, modified_content).await?;
+
+        info!("Doctor status changed to enabled: {}", doctor_id);
+        Ok(true)
+    } else {
+        debug!("Doctor not found or already enabled: {}", doctor_id);
+        Ok(false)
+    }
+}
+
+#[instrument(name = "db_doctor_exists", skip(doctor_id))]
+pub async fn doctor_exists(doctor_id: String) -> bool {
+    let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
+
+    let obj_id = match ObjectId::parse_str(&doctor_id) {
+        Ok(id) => id,
+        Err(_) => return false,
+    };
+
+    let filter = doc! { "_id": obj_id, "is_active": true };
+
+    match collection.count_documents(filter).await {
+        Ok(count) => count > 0,
+        Err(_) => false,
+    }
 }

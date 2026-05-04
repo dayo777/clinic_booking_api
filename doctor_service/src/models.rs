@@ -28,7 +28,7 @@ pub(crate) struct DoctorDto {
     pub(crate) created_at: BsonDateTime,
     #[serde(deserialize_with = "deserialize_option_bson_datetime_or_string")]
     pub(crate) updated_at: Option<BsonDateTime>,
-    pub(crate) active: bool, // using bool instead of 'deleted_at' as in Patient-service
+    pub(crate) is_active: bool, // using bool instead of 'deleted_at' as in Patient-service
 }
 
 // full availability stored for a Doctor at the start of the week
@@ -81,9 +81,30 @@ pub struct CreateDoctorDto {
     pub license_num: String,
 }
 
+// use this struct to return calls for Doctor Data
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DoctorResponseDto {
+    #[serde(rename = "_id")]
+    pub id: ObjectId,
+    pub name: String,
+    pub specialties: Vec<Specialty>,
+    pub license_num: String,
+    pub is_active: bool,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CreateDoctorSchedule {
     // TODO: use this to create a Doctor Schedule endpoint
+}
+
+pub struct ViewDoctorSchedule {
+    // TODO: use this to view a Doctor Schedule, endpoint
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PaginationQuery {
+    pub page: Option<u64>,
+    pub limit: Option<u64>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq, Eq, Hash, EnumString, Display)]

@@ -1,23 +1,21 @@
 // Route handlers for the doctor service
 
 use crate::{models, repository};
-use actix_web::{HttpResponse, post, web};
-use tracing::{error, info, instrument};
+use actix_web::{HttpResponse, delete, get, head, patch, post, web};
+use tracing::{debug, error, info, instrument};
 use validator::Validate;
 
-// existence Check (HEAD): SELECT 1 FROM doctors WHERE id = 123 LIMIT 1;
-// (Fast: the database only checks the index and returns a single bit).
-// #[head("/{id}")]
-// async fn check_doctor_exists(path: web::Path<u32>) -> HttpResponse {
-//     let id = path.into_inner();
-//
-//     // Call a specialized "exists" method in repository
-//     if repository::doctor_exists(id).await {
-//         HttpResponse::Ok().finish() // Returns 200 OK, but no BODY
-//     } else {
-//         HttpResponse::NotFound().finish() // Returns 404
-//     }
-// }
+#[head("/{id}")]
+pub(crate) async fn check_doctor_exists(path: web::Path<String>) -> HttpResponse {
+    let id = path.into_inner();
+
+    // Call a specialized "exists" method in repository
+    if repository::doctor_exists(id).await {
+        HttpResponse::NoContent().finish()
+    } else {
+        HttpResponse::NotFound().finish() // Returns 404
+    }
+}
 
 #[post("")]
 #[instrument(
@@ -59,27 +57,50 @@ pub(crate) async fn create_doctor(payload: web::Json<models::CreateDoctorDto>) -
     }
 }
 
-// #[get("/{id}")]
-// async fn get_doctor(path: web::Path<u32>) -> HttpResponse {
-//     let span = span!("get_doctor", service.name = "doctor_service");
-//     let _guard = span.enter();
-//
-//     let id = path.into_inner();
-//     info!("Retrieving a single doctor with ID: {}", id);
-//
-//     "get doctor handler"
-// }
+// retrieve single Doctor data
+#[get("/{id}")]
+#[instrument(
+    name = "get_doctor_request",
+    fields(payload = %payload)
+)]
+pub(crate) async fn get_doctor(payload: web::Path<String>) -> HttpResponse {
+    info!("Retrieving doctor information");
 
-// TODO: put functionality for filtering, limiting
-// #[get("")]
-// async fn list_doctors() -> HttpResponse {
-//     let span = span!("list_doctors", service.name = "doctor_service");
-//     let _guard = span.enter();
-//
-//     info!("Listing the doctors");
-//
-//     "listing doctor handlers"
-// }
+    match repository::get_doctor(payload.into_inner()).await {
+        Ok(Some(doctor)) => {
+            info!("Retrieved doctor successful");
+            HttpResponse::Ok().json(doctor)
+        }
+        Ok(None) => {
+            info!("Doctor not found");
+            HttpResponse::NotFound().finish()
+        }
+        Err(e) => {
+            debug!(cause = %e, "Failed to retrieve doctor data");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+// no parameters: /patients
+// with parameters: /patients?page=2&limit=10
+// partial parameters: /patients?page=3
+#[get("")]
+#[instrument(name = "list_doctors_request", skip(query))]
+pub(crate) async fn list_doctors(query: web::Query<models::PaginationQuery>) -> HttpResponse {
+    info!("Processing doctor list request");
+
+    match repository::list_doctor(query.into_inner()).await {
+        Ok(doctors) => {
+            info!("Successfully retrieved doctor list");
+            HttpResponse::Ok().json(doctors)
+        }
+        Err(e) => {
+            debug!(cause = %e, "Failed to retrieve doctor list");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
 
 // #[put("{id}")]
 // async fn update_doctor(path: web::Path<u32>) -> HttpResponse {
@@ -92,17 +113,50 @@ pub(crate) async fn create_doctor(payload: web::Json<models::CreateDoctorDto>) -
 //     "Updating doctor handler"
 // }
 
-// // TODO: doctor status is changed to Archived, do not delete
-// #[delete("/{id}")]
-// async fn delete_doctor(path: web::Path<u32>) -> HttpResponse {
-//     let span = span!("delete_doctor", service.name = "doctor_service");
-//     let _guard = span.enter();
-//
-//     let id = path.into_inner();
-//     info!("Removing doctor handler with ID: {}", id);
-//
-//     "Removing doctor handler"
-// }
+// Doctor 'is_active' is set to false, & not deleted.
+#[delete("/{id}")]
+#[instrument(name = "delete_doctor_request", fields(id = %path))]
+pub(crate) async fn delete_doctor(path: web::Path<String>) -> HttpResponse {
+    let id = path.into_inner();
+    info!("Processing doctor deletion handler for ID: {}", &id);
+
+    match repository::delete_doctor(id).await {
+        Ok(true) => {
+            info!("Doctor set to inactive/deletion");
+            HttpResponse::NoContent().finish()
+        }
+        Ok(false) => {
+            info!("Doctor not found or already inactive");
+            HttpResponse::NotFound().finish()
+        }
+        Err(e) => {
+            debug!(cause = %e, "Failed to deactivate doctor");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+// change the value of 'is_active' to true
+#[patch("/{id}/enable")]
+pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
+    let id = path.into_inner();
+    info!("Processing doctor enablement handler for ID: {}", &id);
+
+    match repository::enable_doctor(id).await {
+        Ok(true) => {
+            info!("Doctor enabled");
+            HttpResponse::NoContent().finish()
+        }
+        Ok(false) => {
+            info!("Doctor not found or already enabled");
+            HttpResponse::NotFound().finish()
+        }
+        Err(e) => {
+            debug!(cause = %e, "Failed to enable doctor");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
 
 // other possible endpoints
 // /{id}/appointments -- get all appointments for this doctor

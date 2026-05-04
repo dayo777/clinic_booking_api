@@ -54,7 +54,8 @@ pub struct CreatePatientDto {
     pub contact_info: ContactInfo,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+// use this to return calls for Patient Data
+#[derive(Serialize, Debug)]
 pub struct PatientResponseDto {
     pub id: ObjectId,
     pub name: String,

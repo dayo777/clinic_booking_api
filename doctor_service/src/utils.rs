@@ -2,7 +2,9 @@
 // use chrono::{DateTime, Datelike, Timelike, Utc};
 // use std::str::FromStr;
 use crate::models::Specialty;
+use mongodb::bson::DateTime as BsonDateTime;
 use std::str::FromStr;
+use std::time::{Duration, SystemTime};
 use validator::ValidationError;
 
 pub fn validate_specialties(values: &Vec<Specialty>) -> Result<(), ValidationError> {
@@ -23,6 +25,22 @@ pub fn validate_specialty(value: String) -> Result<(), ValidationError> {
         Ok(_) => Ok(()),
     }
 }
+
+pub(crate) fn check_date_is_24hr_in_future(
+    booking_date: &BsonDateTime,
+) -> Result<(), ValidationError> {
+    let twenty_four_hour_from_now =
+        BsonDateTime::from_system_time(SystemTime::now() + Duration::from_secs(86400));
+
+    if *booking_date < twenty_four_hour_from_now {
+        return Err(ValidationError::new(
+            "Booking date must be at least 24 hours in the future",
+        ));
+    }
+
+    Ok(())
+}
+
 //
 // pub fn is_doctor_available(doctor: &DoctorDto, requested_start: DateTime<Utc>, requested_end: DateTime<Utc>) -> bool {
 //     // 1. Check if the day of the week is in the schedule

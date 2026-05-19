@@ -248,6 +248,9 @@ name = "appointment_service"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "mongodb",
+ "serde",
+ "validator",
 ]
 
 [[package]]
@@ -962,6 +965,7 @@ dependencies = [
  "serde_json",
  "strum",
  "testcontainers",
+ "thiserror",
  "tokio",
  "tracing",
  "validator",

@@ -1,5 +1,4 @@
-// who the doctor is, associated_clinic, doctor-working-schedule
-use chrono::{NaiveDate, NaiveTime};
+// use chrono::NaiveDate;
 use common::utils::{
     deserialize_bson_datetime_or_string, deserialize_option_bson_datetime_or_string,
 };
@@ -21,54 +20,14 @@ pub(crate) struct DoctorDto {
     pub(crate) license_num: String,
 
     // availability
-    pub schedule: Option<Schedule>,
+    pub schedule: Option<ScheduleSlot>,
 
-    // System generated
+    // system generated
     #[serde(deserialize_with = "deserialize_bson_datetime_or_string")]
     pub(crate) created_at: BsonDateTime,
     #[serde(deserialize_with = "deserialize_option_bson_datetime_or_string")]
     pub(crate) updated_at: Option<BsonDateTime>,
     pub(crate) is_active: bool, // using bool instead of 'deleted_at' as in Patient-service
-}
-
-// full availability stored for a Doctor at the start of the week
-// this can change every new week
-#[derive(Serialize, Deserialize, Debug, Validate)]
-pub struct Schedule {
-    pub slot_duration_minutes: u32, // slot duration for each patient attended to
-    pub weekly: Vec<WeeklySlot>,    // the repeating weekly template
-    pub overrides: Vec<ScheduleOverride>, // date-specific exceptions
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct WeeklySlot {
-    pub day_of_week: DayOfWeek,
-    pub hours: WorkingHours,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, EnumString, Display)]
-pub enum DayOfWeek {
-    Monday,
-    Tuesday,
-    Wednesday,
-    Thursday,
-    Friday,
-    Saturday,
-    Sunday,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct WorkingHours {
-    start_time: NaiveTime,
-    end_time: NaiveTime,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ScheduleOverride {
-    pub date: NaiveDate,
-    pub available: bool,
-    pub working_hours: Option<WorkingHours>,
-    pub reason: Option<String>,
 }
 
 #[derive(Deserialize, Validate, Debug)]
@@ -90,15 +49,6 @@ pub struct DoctorResponseDto {
     pub specialties: Vec<Specialty>,
     pub license_num: String,
     pub is_active: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct CreateDoctorSchedule {
-    // TODO: use this to create a Doctor Schedule endpoint
-}
-
-pub struct ViewDoctorSchedule {
-    // TODO: use this to view a Doctor Schedule, endpoint
 }
 
 #[derive(Deserialize, Debug)]
@@ -160,4 +110,38 @@ impl<'de> Deserialize<'de> for Specialty {
             Err(_) => Ok(Specialty::Other(s)),
         }
     }
+}
+
+/// All definition for the Doctor Scheduling is defined below this line
+/// Trying to keep the Backend structure simple, just using Date & Time
+/// The front-end should easily infer the DayOfWeek and other details from the Date&Time
+
+// A single schedule slot the Doctor creates
+// Doctor create their own schedule which patient can book for.
+#[derive(Serialize, Deserialize, Debug, Validate)]
+pub struct ScheduleSlot {
+    pub start_time: BsonDateTime,
+    pub end_time: BsonDateTime,
+    // make this an Option so `ViewDoctorSchedule` can peek a ScheduleSlot
+    pub is_available: Option<bool>, // changes to `False` once booked by a patient
+}
+
+// Have a separate structure to store the Doctor schedule to avoid hitting the main DoctorDto
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DoctorSchedule {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<ObjectId>,
+    pub doctor_id: ObjectId,
+    pub slots: Vec<ScheduleSlot>,
+    #[serde(deserialize_with = "deserialize_bson_datetime_or_string")]
+    pub created_at: BsonDateTime,
+    #[serde(deserialize_with = "deserialize_option_bson_datetime_or_string")]
+    pub updated_at: Option<BsonDateTime>,
+}
+
+// use this to peep if a Doctor is available for a given slot
+// appointment endpoint calls this to know if Patient can book that Slot
+pub struct ViewDoctorSchedule {
+    pub doctor_id: ObjectId,
+    pub slots: ScheduleSlot,
 }

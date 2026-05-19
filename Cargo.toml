@@ -6,8 +6,10 @@ members = [
     "doctor_service",
     "patient_service",
 ]
-
 resolver = "2"
+
+[profile.release]
+panic = 'abort'
 
 [workspace.dependencies]
 actix-web = "4.12.1"

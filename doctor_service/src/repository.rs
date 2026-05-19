@@ -1,5 +1,8 @@
 // Database operations: insert, find_by_id, find_by_email, etc.
-use crate::models::{CreateDoctorDto, DoctorDto, DoctorResponseDto, PaginationQuery};
+use crate::error::DoctorServiceError;
+use crate::models::{
+    CreateDoctorDto, DoctorDto, DoctorResponseDto, DoctorSchedule, PaginationQuery, ScheduleSlot,
+};
 use crate::utils;
 use common::db::get_collection;
 use futures::stream::TryStreamExt;
@@ -10,7 +13,9 @@ use mongodb::results::InsertOneResult;
 use tracing::{debug, info, instrument};
 
 // declare collections as represented in MongoDB here
-static DOCTOR_COLLECTION: &str = "doctors_collection"; //used `collection` instead of table
+static DOCTOR_COLLECTION: &str = "doctors_collection";
+// use this to store the Doctor's schedule, prevent endpoint always hitting main Doctor table
+static SCHEDULE_COLLECTION: &str = "doctor_schedule_collection";
 
 #[allow(clippy::redundant_pattern_matching)]
 #[instrument(name = "db_create_doctor", skip(payload))]
@@ -175,7 +180,7 @@ pub async fn enable_doctor(doctor_id: String) -> Result<bool, MongodbError> {
     let filter = doc! { "_id": obj_id };
     let doctor_doc = collection.find_one(filter.clone()).await?;
 
-    if let Some(mut _doctor) = doctor_doc {
+    if let Some(_doctor) = doctor_doc {
         let modified_content = doc! {
             "$set": {
                 "is_active": true,
@@ -209,3 +214,68 @@ pub async fn doctor_exists(doctor_id: String) -> bool {
         Err(_) => false,
     }
 }
+
+// Doctors use this endpoint to create their Schedule
+pub async fn create_doctor_schedule(
+    doctor_id: String,
+    slots: Vec<ScheduleSlot>,
+) -> Result<(), DoctorServiceError> {
+    // call the Doctor exists to confirm the Doctor is Active,
+    // then go ahead with Booking the Slot
+    // Write code below
+
+    let doctor_id = match ObjectId::parse_str(&doctor_id) {
+        Ok(id) => id,
+        Err(e) => {
+            debug!("Invalid ObjectId format: {}", e);
+            return Err(DoctorServiceError::DoctorNotFound);
+        }
+    };
+
+    // confirm the DoctorID exist & is active
+    if !doctor_exists(doctor_id.to_string()).await {
+        debug!(
+            "Unable to create Doctor schedule, Invalid Doctor-Id: {}",
+            doctor_id
+        );
+        return Err(DoctorServiceError::DoctorNotFound);
+    }
+
+    // confirm the Doctor booking is 24 hours ahead
+    // write Slot check for each slot
+    for slot in &slots {
+        if utils::check_date_is_24hr_in_future(&slot.start_time).is_ok() {
+            continue;
+        } else {
+            return Err(DoctorServiceError::Validation(
+                "Slot start time is not 24 hours ahead".to_string(),
+            ));
+        }
+    }
+
+    let booking_collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
+    let new_booking = DoctorSchedule {
+        id: None,
+        doctor_id,
+        slots,
+        created_at: mongodb::bson::DateTime::now(),
+        updated_at: None,
+    };
+
+    info!("Inserting new booking into DB for doctor_id: {}", doctor_id);
+    booking_collection.insert_one(new_booking).await?;
+
+    // TODO: return the ScheduleSLots so front-end can display them
+    Ok(())
+}
+
+// pub async fn update_doctor_schedule(
+//     doctor_id: String,
+//     slots: Vec<ScheduleSlot>,
+// ) -> Result<(), MongodbError> {
+//     // TODO: update the Doctor Schedule as Patients book
+//     // first check if Doctor exist & is Active
+//     // then update the Doctor Schedule slot to False
+//
+//     todo!("Update the Doctor schedule here.")
+// }

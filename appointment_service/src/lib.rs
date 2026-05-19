@@ -1,4 +1,5 @@
 mod models;
+mod utils;
 
 use actix_web::{HttpResponse, web};
 

@@ -147,7 +147,8 @@ pub async fn delete_doctor(doctor_id: String) -> Result<bool, MongodbError> {
     let doctor_doc = collection.find_one(filter.clone()).await?;
 
     // this ensures the Data exist before working on it
-    if let Some(mut _doctor) = doctor_doc {
+    // TODO: might have to add 'mut' here
+    if let Some(_doctor) = doctor_doc {
         let modified_content = doc! {
             "$set": {
                 "is_active": false,
@@ -219,7 +220,7 @@ pub async fn doctor_exists(doctor_id: String) -> bool {
 pub async fn create_doctor_schedule(
     doctor_id: String,
     slots: Vec<ScheduleSlot>,
-) -> Result<(), DoctorServiceError> {
+) -> Result<Vec<ScheduleSlot>, DoctorServiceError> {
     // call the Doctor exists to confirm the Doctor is Active,
     // then go ahead with Booking the Slot
     // Write code below
@@ -253,6 +254,7 @@ pub async fn create_doctor_schedule(
         }
     }
 
+    let slots_to_return = slots.clone();
     let booking_collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
     let new_booking = DoctorSchedule {
         id: None,
@@ -265,8 +267,8 @@ pub async fn create_doctor_schedule(
     info!("Inserting new booking into DB for doctor_id: {}", doctor_id);
     booking_collection.insert_one(new_booking).await?;
 
-    // TODO: return the ScheduleSLots so front-end can display them
-    Ok(())
+    // front-end can change use this to display Specific date/time information for use
+    Ok(slots_to_return)
 }
 
 // pub async fn update_doctor_schedule(

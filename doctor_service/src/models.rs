@@ -27,7 +27,7 @@ pub(crate) struct DoctorDto {
     pub(crate) created_at: BsonDateTime,
     #[serde(deserialize_with = "deserialize_option_bson_datetime_or_string")]
     pub(crate) updated_at: Option<BsonDateTime>,
-    pub(crate) is_active: bool, // using bool instead of 'deleted_at' as in Patient-service
+    pub(crate) is_active: bool, // using bool instead of 'deleted_at' like in Patient-service
 }
 
 #[derive(Deserialize, Validate, Debug)]
@@ -118,10 +118,11 @@ impl<'de> Deserialize<'de> for Specialty {
 
 // A single schedule slot the Doctor creates
 // Doctor create their own schedule which patient can book for.
-#[derive(Serialize, Deserialize, Debug, Validate)]
+#[derive(Serialize, Deserialize, Debug, Validate, Clone)]
 pub struct ScheduleSlot {
     pub start_time: BsonDateTime,
-    pub end_time: BsonDateTime,
+    // this is an Option so we can make every Schedule 30min long
+    pub end_time: Option<BsonDateTime>,
     // make this an Option so `ViewDoctorSchedule` can peek a ScheduleSlot
     pub is_available: Option<bool>, // changes to `False` once booked by a patient
 }

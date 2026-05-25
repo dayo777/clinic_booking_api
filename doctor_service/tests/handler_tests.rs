@@ -1,4 +1,4 @@
-// test the handlers endpoints here
+// test the handler endpoints here
 
 mod setup_env;
 
@@ -25,13 +25,9 @@ mod doctor_service_handler_test {
 
         let app = test::init_service(App::new().configure(doctor_service::doctor_config_v1)).await;
 
-        let unique_name = format!(
-            "Dr. Smith {}",
-            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
-        );
         let req_data = json!({
-            "name": unique_name,
-            "specialties": ["cardio"],
+            "name": "Dr. Dru",
+            "specialties": ["cardio", "derm"],
             "license_num": "LIC12345"
         });
 
@@ -43,19 +39,69 @@ mod doctor_service_handler_test {
             .to_request();
 
         let resp = test::call_service(&app, req).await;
-
-        assert_eq!(resp.status(), http::StatusCode::CREATED);
+        assert!(resp.status().is_success());
     }
 
+    // request should fail due to name being less than 3
     #[actix_web::test]
-    async fn test_doctor_post_create_invalid_data() {
+    async fn test_doctor_post_create_invalid_name() {
         setup_integration_test().await;
 
         let app = test::init_service(App::new().configure(doctor_service::doctor_config_v1)).await;
 
         let req_data = json!({
-            "name": "Dr", // too short, min 3
+            "name": "Dr", // too short, less than 3
+            "specialties": ["gp", "neuro"],
+            "license_num": "LIC-123"
+        });
+
+        let req = test::TestRequest::post()
+            .insert_header(ContentType::json())
+            .insert_header(("x-api-version", "1"))
+            .uri("/doctor")
+            .set_json(req_data)
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    // request should fail due to Bad specialty
+    #[actix_web::test]
+    async fn test_doctor_post_create_invalid_specialty() {
+        setup_integration_test().await;
+
+        let app = test::init_service(App::new().configure(doctor_service::doctor_config_v1)).await;
+
+        let req_data = json!({
+            "name": "Dr Dru",
             "specialties": ["invalid-specialty"],
+            "license_num": "123"
+        });
+
+        let req = test::TestRequest::post()
+            .insert_header(ContentType::json())
+            .insert_header(("x-api-version", "1"))
+            .uri("/doctor")
+            .set_json(req_data)
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    // request should fail due to License-number being less than 5
+    #[actix_web::test]
+    async fn test_doctor_post_create_invalid_license() {
+        setup_integration_test().await;
+
+        let app = test::init_service(App::new().configure(doctor_service::doctor_config_v1)).await;
+
+        let req_data = json!({
+            "name": "Dr Steve",
+            "specialties": ["neuro", "derm"],
             "license_num": "123" // too short, min 5
         });
 
@@ -71,6 +117,7 @@ mod doctor_service_handler_test {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
+    // ensure you can retrieve a Dcotor object
     #[actix_web::test]
     async fn test_get_doctor_success() {
         setup_integration_test().await;

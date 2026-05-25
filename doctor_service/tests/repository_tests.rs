@@ -17,9 +17,9 @@ mod doctor_repository_test {
         setup_integration_test().await;
 
         let payload = CreateDoctorDto {
-            name: "Dr. Repository".to_string(),
-            specialties: vec![Specialty::GeneralPractice],
-            license_num: "LIC-REPO-1".to_string(),
+            name: "Dr. Doom".to_string(),
+            specialties: vec![Specialty::GeneralPractice, Specialty::Dermatology],
+            license_num: "DM-REPO-1".to_string(),
         };
 
         let insert_result = repository::create_doctor(payload).await.unwrap();
@@ -35,7 +35,8 @@ mod doctor_repository_test {
 
         // Now it should be found
         let doctor = repository::get_doctor(doctor_id).await.unwrap().unwrap();
-        assert_eq!(doctor.name, "Dr. Repository");
+        assert_eq!(doctor.name, "Dr. Doom");
+        assert_eq!(doctor.license_num, "DM-REPO-1");
         assert!(doctor.is_active);
     }
 

@@ -1,7 +1,7 @@
 // Route handlers for the doctor service
 
 use crate::{models, repository};
-use actix_web::{HttpResponse, delete, get, head, patch, post, web};
+use actix_web::{HttpResponse, ResponseError, delete, get, head, patch, post, web};
 use tracing::{debug, error, info, instrument};
 use validator::Validate;
 
@@ -113,7 +113,7 @@ pub(crate) async fn list_doctors(query: web::Query<models::PaginationQuery>) -> 
 //     "Updating doctor handler"
 // }
 
-// Doctor 'is_active' is set to false, & not deleted.
+// Doctor 'is_active' is set to false & not deleted.
 #[delete("/{id}")]
 #[instrument(name = "delete_doctor_request", fields(id = %path))]
 pub(crate) async fn delete_doctor(path: web::Path<String>) -> HttpResponse {
@@ -154,6 +154,35 @@ pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
         Err(e) => {
             debug!(cause = %e, "Failed to enable doctor");
             HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+#[post("/{id}/create-schedule")]
+pub(crate) async fn create_doctor_schedule(
+    path: web::Path<String>,
+    payload: web::Json<Vec<models::ScheduleSlot>>,
+) -> HttpResponse {
+    let doctor_id = path.into_inner();
+
+    let slots: Vec<models::ScheduleSlot> = payload
+        .into_inner()
+        .into_iter()
+        .map(|s| models::ScheduleSlot {
+            start_time: s.start_time,
+            end_time: s.end_time,
+            is_available: Some(true),
+        })
+        .collect();
+
+    match repository::create_doctor_schedule(doctor_id, slots).await {
+        Ok(slots) => {
+            info!("Created Doctor schedule.");
+            HttpResponse::Ok().json(slots)
+        }
+        Err(e) => {
+            debug!("Unable to create Doctor Schedule: {:?}", e);
+            e.error_response()
         }
     }
 }

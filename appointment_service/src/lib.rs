@@ -1,3 +1,6 @@
+mod models;
+mod utils;
+
 use actix_web::{HttpResponse, web};
 
 pub fn appointment_config_v1(cfg: &mut web::ServiceConfig) {

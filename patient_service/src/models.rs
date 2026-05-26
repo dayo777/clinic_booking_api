@@ -1,62 +1,16 @@
-//! Data models and Data Transfer Objects (DTOs) for the patient service.
-//!
-//! This module contains the structs used for serializing and deserializing
-//! request and response bodies, as well as validation logic.
+// Data models and Data Transfer Objects (DTOs) for the patient service.
 
-use chrono::{DateTime, NaiveDate, Utc};
-use mongodb::bson::{Bson, DateTime as BsonDateTime, oid::ObjectId};
-use serde::{Deserialize, Deserializer, Serialize};
+// This module contains the structs used for serializing and deserializing
+// request and response bodies, as well as validation logic.
+
+use chrono::NaiveDate;
+use common::utils::{
+    deserialize_bson_datetime_or_string, deserialize_option_bson_datetime_or_string,
+};
+use mongodb::bson::{DateTime as BsonDateTime, oid::ObjectId};
+use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 use validator::Validate;
-
-/// Deserializes a BSON datetime field that may be stored as either BSON DateTime or an ISO string
-/// (e.g. from chrono's default serde, which serializes DateTime as string). Accepts both so that
-/// existing documents in MongoDB continue to work.
-fn deserialize_bson_datetime_or_string<'de, D>(deserializer: D) -> Result<BsonDateTime, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let bson_val = Bson::deserialize(deserializer)?;
-    match bson_val {
-        Bson::DateTime(dt) => Ok(dt),
-        Bson::String(s) => {
-            let chrono_dt: DateTime<Utc> = s
-                .parse()
-                .map_err(|e: chrono::ParseError| serde::de::Error::custom(e))?;
-            Ok(BsonDateTime::from_millis(chrono_dt.timestamp_millis()))
-        }
-        other => Err(serde::de::Error::custom(format!(
-            "expected DateTime or string, got {:?}",
-            other
-        ))),
-    }
-}
-
-/// Same as above for Option<BsonDateTime> (updated_at, deleted_at).
-fn deserialize_option_bson_datetime_or_string<'de, D>(
-    deserializer: D,
-) -> Result<Option<BsonDateTime>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let opt = Option::<Bson>::deserialize(deserializer)?;
-    match opt {
-        None => Ok(None),
-        Some(Bson::DateTime(dt)) => Ok(Some(dt)),
-        Some(Bson::String(s)) => {
-            let chrono_dt: DateTime<Utc> = s
-                .parse()
-                .map_err(|e: chrono::ParseError| serde::de::Error::custom(e))?;
-            Ok(Some(BsonDateTime::from_millis(
-                chrono_dt.timestamp_millis(),
-            )))
-        }
-        Some(other) => Err(serde::de::Error::custom(format!(
-            "expected DateTime or string, got {:?}",
-            other
-        ))),
-    }
-}
 
 // Dto = Data Object
 #[derive(Serialize, Deserialize, Debug, Validate)]
@@ -100,7 +54,8 @@ pub struct CreatePatientDto {
     pub contact_info: ContactInfo,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+// use this to return calls for Patient Data
+#[derive(Serialize, Debug)]
 pub struct PatientResponseDto {
     pub id: ObjectId,
     pub name: String,
@@ -118,7 +73,7 @@ pub struct PaginationQuery {
     pub limit: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Debug, EnumString, Display, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, EnumString, Display, Clone, Copy, PartialEq)]
 pub enum Gender {
     #[strum(serialize = "male")]
     #[serde(rename = "male", alias = "Male")]

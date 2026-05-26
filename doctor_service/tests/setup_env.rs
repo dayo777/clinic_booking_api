@@ -1,7 +1,10 @@
-// MongoDB & Jaeger instances for testing is initialized here
+// set up the environment for testing in this Workspace
 use std::time::{SystemTime, UNIX_EPOCH};
-use testcontainers::core::{IntoContainerPort, WaitFor};
-use testcontainers::{ContainerAsync, GenericImage, runners::AsyncRunner};
+use testcontainers::{
+    ContainerAsync, GenericImage,
+    core::{IntoContainerPort, WaitFor},
+    runners::AsyncRunner,
+};
 
 #[allow(dead_code)]
 pub struct TestEnv {
@@ -22,7 +25,7 @@ pub async fn setup_test_env() -> &'static TestEnv {
                 .with_wait_for(WaitFor::message_on_stdout("Waiting for connections"))
                 .pull_image()
                 .await
-                .expect("failed to pull mongodb image")
+                .expect("failed to pull mongodb image for testing.")
                 .start()
                 .await
                 .expect("failed to start mongodb container");
@@ -35,7 +38,7 @@ pub async fn setup_test_env() -> &'static TestEnv {
 
             let jaeger_container = GenericImage::new("jaegertracing/jaeger", "2.14.1")
                 .with_exposed_port(4317.tcp())
-                .with_wait_for(WaitFor::seconds(10))
+                .with_wait_for(WaitFor::seconds(30))
                 .pull_image()
                 .await
                 .expect("failed to pull jaeger image")
@@ -47,12 +50,14 @@ pub async fn setup_test_env() -> &'static TestEnv {
                 .get_host_port_ipv4(4317.tcp())
                 .await
                 .expect("failed to read jaeger mapped port");
+
             let otlp_endpoint = format!("http://127.0.0.1:{jaeger_port}");
 
-            // retrieve the system time, & append to DB name so that each DB instance name is different
+            // retrieve the system-time, & append to DB name so that each DB instance name is different
+            // this is for local-runs, CI runs would not have this issue.
             let test_run_suffix = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .expect("system time before unix epoch")
+                .expect("system time before Unix epoch")
                 .as_millis();
             let mongodb_database = format!("clinic_booking_api_test_{test_run_suffix}");
 

@@ -9,7 +9,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 pub fn init_tracing(service_name: &str) {
-    // for prod, change the file name on line 13 to point to live config e.g. settings_prod.yaml
+    // for prod, change the file name on line 14 to point to live config e.g. settings_prod.yaml
     let logging_config = Config::builder()
         .add_source(config::File::with_name("settings_dev.toml").required(false))
         .build()

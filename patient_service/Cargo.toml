@@ -9,11 +9,11 @@ tracing = { workspace = true }
 serde = { workspace = true }
 mongodb = { workspace = true }
 futures = { workspace = true }
-thiserror = { workspace = true }
 validator = { workspace = true }
 strum = { workspace = true }
 chrono = { workspace = true }
-common = { path = "../common" } # import the DB helper from here
+thiserror = { workspace = true }
+common = { path = "../common" } # internal workspace import
 
 [dev-dependencies]
 testcontainers = { version = "0.27.2", features = ["blocking"] }

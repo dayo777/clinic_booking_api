@@ -1,48 +1,40 @@
-//! HTTP request handlers for the patient service.
-//!
-//! module contains the Actix-web route handlers for CRUD operations on patient resources.
+// HTTP request handlers for the patient service.
 
 use crate::{models, repository};
-use actix_web::{HttpResponse, delete, get, post, put, web};
+use actix_web::{HttpResponse, delete, get, head, post, put, web};
 use tracing::{debug, error, info, instrument};
 use validator::Validate;
 
-// existence Check (HEAD): SELECT 1 FROM patients WHERE id = 123 LIMIT 1;
-// (Fast: the database only checks the index and returns a single bit).
-// #[head("/{id}")]
-// async fn check_patient_exists(path: web::Path<u32>) -> HttpResponse {
-//     let id = path.into_inner();
-//
-//     // Call a specialized "exists" method in repository
-//     if repository::patient_exists(id).await {
-//         HttpResponse::Ok().finish() // Returns 200 OK, but no BODY
-//     } else {
-//         HttpResponse::NotFound().finish() // Returns 404
-//     }
-// }
+// quick check if Patient exist
+#[head("/{id}")]
+pub(crate) async fn check_patient_exists(path: web::Path<String>) -> HttpResponse {
+    let id = path.into_inner();
+
+    if repository::patient_exists(id).await {
+        HttpResponse::NoContent().finish()
+    } else {
+        HttpResponse::NotFound().finish() // Returns 404
+    }
+}
 
 #[post("")]
-#[instrument(
-    name = "create_patient_request",
-    skip(payload),
-    fields(payload = %payload.name)
-)]
+#[instrument(name = "create_patient_request", skip(payload), fields(payload = %payload.name))]
 pub(crate) async fn create_patient(payload: web::Json<models::CreatePatientDto>) -> HttpResponse {
     info!("Processing new patient registration for: {}", payload.name);
 
     if let Err(e) = payload.validate() {
         error!("Validation failed for patient {}: {:?}", payload.name, e);
-        return HttpResponse::BadRequest().body(format!("Validation failed: {:?}", e));
+        return HttpResponse::BadRequest().body("Failed to create save new patient details.");
     }
 
     let dto = payload.into_inner();
     match repository::create_patient(dto).await {
         Ok(_) => {
-            info!("Registration successful");
+            info!("Patient registration successful");
             HttpResponse::Created().finish()
         }
         Err(e) => {
-            error!(error = %e, "Registration failed");
+            error!(error = %e, "Patient registration failed");
             HttpResponse::InternalServerError().finish()
         }
     }
@@ -50,10 +42,7 @@ pub(crate) async fn create_patient(payload: web::Json<models::CreatePatientDto>)
 
 // retrieve a single patient
 #[get("/{id}")]
-#[instrument(
-    name = "get_patient_request",
-    fields(payload = %payload)
-)]
+#[instrument(name = "get_patient_request", fields(payload = %payload))]
 pub(crate) async fn get_patient(payload: web::Path<String>) -> HttpResponse {
     info!("Retrieving patient information");
 
@@ -67,7 +56,7 @@ pub(crate) async fn get_patient(payload: web::Path<String>) -> HttpResponse {
             HttpResponse::NotFound().finish()
         }
         Err(e) => {
-            debug!("Database error: {:?}", e);
+            debug!(cause = %e, "Failed to retrieve patient data");
             HttpResponse::InternalServerError().finish()
         }
     }
@@ -79,7 +68,7 @@ pub(crate) async fn get_patient(payload: web::Path<String>) -> HttpResponse {
 #[get("")]
 #[instrument(name = "list_patients_request", skip(query))]
 pub(crate) async fn list_patients(query: web::Query<models::PaginationQuery>) -> HttpResponse {
-    info!("Processing list patient");
+    info!("Processing patient list request");
 
     match repository::list_patient(query.into_inner()).await {
         Ok(patients) => {
@@ -87,7 +76,7 @@ pub(crate) async fn list_patients(query: web::Query<models::PaginationQuery>) ->
             HttpResponse::Ok().json(patients)
         }
         Err(e) => {
-            error!(error = %e, error_debug = ?e, "Failed to list patients");
+            debug!(cause = %e, "Failed to list patients");
             HttpResponse::InternalServerError().finish()
         }
     }
@@ -95,13 +84,10 @@ pub(crate) async fn list_patients(query: web::Query<models::PaginationQuery>) ->
 
 // patient data is never deleted, moved to another Collection named `patient_deleted`
 #[delete("/{id}")]
-#[instrument(
-    name = "delete_patient_request",
-    fields(id = %path)
-)]
+#[instrument(name = "delete_patient_request", fields(id = %path))]
 pub(crate) async fn delete_patient(path: web::Path<String>) -> HttpResponse {
     let id = path.into_inner();
-    info!("Processing patient deletion for ID: {}", id);
+    info!("Processing patient deletion handler for ID: {}", id);
 
     match repository::delete_patient(id).await {
         Ok(true) => {
@@ -109,11 +95,11 @@ pub(crate) async fn delete_patient(path: web::Path<String>) -> HttpResponse {
             HttpResponse::NoContent().finish()
         }
         Ok(false) => {
-            debug!("Patient not found or already deleted");
+            info!("Patient not found or already deleted/archived");
             HttpResponse::NotFound().finish()
         }
         Err(e) => {
-            error!(error = %e, "Failed to delete patient");
+            debug!(cause = %e, "Failed to delete patient");
             HttpResponse::InternalServerError().finish()
         }
     }

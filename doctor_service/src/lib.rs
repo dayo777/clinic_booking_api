@@ -1,7 +1,8 @@
 mod error;
-mod handlers;
-mod models;
-mod repository;
+pub mod handlers;
+pub mod models;
+pub mod repository;
+pub mod utils;
 
 use actix_web::{HttpResponse, guard, web};
 
@@ -9,11 +10,14 @@ pub fn doctor_config_v1(cfg: &mut web::ServiceConfig) {
     tracing::info!("The doctor service is starting");
     cfg.service(
         web::scope("/doctor")
+            .service(handlers::check_doctor_exists)
             .service(handlers::create_doctor)
             .service(handlers::get_doctor)
-            .service(handlers::list_doctors)
+            .service(handlers::list_doctors) // cont from here this not working
             .service(handlers::delete_doctor)
-            .service(handlers::update_doctor)
+            .service(handlers::enable_doctor)
+            .service(handlers::create_doctor_schedule)
+            // .service(handlers::update_doctor)
             .default_service(
                 web::route()
                     .guard(guard::Head())

@@ -73,7 +73,7 @@ pub struct PaginationQuery {
     pub limit: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Debug, EnumString, Display, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, EnumString, Display, Clone, Copy, PartialEq)]
 pub enum Gender {
     #[strum(serialize = "male")]
     #[serde(rename = "male", alias = "Male")]

@@ -37,22 +37,4 @@ jobs:
           docker pull jaegertracing/jaeger:2.14.1
 
       - name: Run Tests for doctor_service_handlers
-        run: cargo test -p doctor_service  --test handler_tests -- --test-threads=1
-
-  test-doctor-repository:
-    needs: test-doctor-handler
-    name: Test doctor-repository
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          cache-workdir: "."
-
-      - name: Pre-pull test images
-        run: |
-          docker pull mongo:8.3-rc-noble
-          docker pull jaegertracing/jaeger:2.14.1
-
-      - name: Run Tests for doctor_service_repository
-        run: cargo test -p doctor_service  --test repository_tests -- --test-threads=1
+        run: cargo test -p doctor_service -- --test-threads=1

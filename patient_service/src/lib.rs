@@ -5,7 +5,7 @@
 
 // To view this service structure, use the cmd `cargo modules structure --package patient_service`
 
-mod error;
+mod errors;
 pub mod handlers;
 pub mod models;
 pub mod repository;

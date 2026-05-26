@@ -7,7 +7,6 @@ use crate::utils;
 use common::db::get_collection;
 use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, oid::ObjectId};
-use mongodb::error::Error as MongodbError;
 use mongodb::options::FindOptions;
 use mongodb::results::InsertOneResult;
 use tracing::{debug, info, instrument};
@@ -19,7 +18,9 @@ static SCHEDULE_COLLECTION: &str = "doctor_schedule_collection";
 
 #[allow(clippy::redundant_pattern_matching)]
 #[instrument(name = "db_create_doctor", skip(payload))]
-pub async fn create_doctor(payload: CreateDoctorDto) -> Result<InsertOneResult, MongodbError> {
+pub async fn create_doctor(
+    payload: CreateDoctorDto,
+) -> Result<InsertOneResult, DoctorServiceError> {
     info!(
         "db_create_doctor: Creating doctor with license: {}",
         payload.license_num
@@ -28,11 +29,8 @@ pub async fn create_doctor(payload: CreateDoctorDto) -> Result<InsertOneResult, 
     // confirm the Doctor specialties are valid
     let specialties = payload.specialties.clone();
     for specialty in specialties.iter() {
-        if let Err(_) = utils::validate_specialty(specialty.to_string()) {
-            return Err(MongodbError::from(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Invalid specialty",
-            )));
+        if let Err(e) = utils::validate_specialty(specialty.to_string()) {
+            return Err(DoctorServiceError::Validation(e));
         }
     }
 
@@ -57,11 +55,14 @@ pub async fn create_doctor(payload: CreateDoctorDto) -> Result<InsertOneResult, 
         "Inserting new doctor into DB for license_num: {}",
         payload.license_num
     );
-    collection.insert_one(new_doctor).await
+
+    Ok(collection.insert_one(new_doctor).await?)
 }
 
 #[instrument(name = "db_get_doctor", skip(doctor_id))]
-pub async fn get_doctor(doctor_id: String) -> Result<Option<DoctorResponseDto>, MongodbError> {
+pub async fn get_doctor(
+    doctor_id: String,
+) -> Result<Option<DoctorResponseDto>, DoctorServiceError> {
     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
 
     let obj_id = match ObjectId::parse_str(&doctor_id) {
@@ -89,7 +90,7 @@ pub async fn get_doctor(doctor_id: String) -> Result<Option<DoctorResponseDto>, 
 #[instrument(name = "db_list_doctors", skip(pagination))]
 pub async fn list_doctor(
     pagination: PaginationQuery,
-) -> Result<Vec<DoctorResponseDto>, MongodbError> {
+) -> Result<Vec<DoctorResponseDto>, DoctorServiceError> {
     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
     const DEFAULT_LIMIT: u64 = 15;
     const MAX_LIMIT: u64 = 100;
@@ -132,7 +133,7 @@ pub async fn list_doctor(
 }
 
 #[instrument(name = "db_delete_doctor", fields(doctor_id = %doctor_id))]
-pub async fn delete_doctor(doctor_id: String) -> Result<bool, MongodbError> {
+pub async fn delete_doctor(doctor_id: String) -> Result<bool, DoctorServiceError> {
     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
 
     let obj_id = match ObjectId::parse_str(&doctor_id) {
@@ -167,7 +168,7 @@ pub async fn delete_doctor(doctor_id: String) -> Result<bool, MongodbError> {
 }
 
 #[instrument(name = "db_enable_doctor", fields(doctor_id = %doctor_id))]
-pub async fn enable_doctor(doctor_id: String) -> Result<bool, MongodbError> {
+pub async fn enable_doctor(doctor_id: String) -> Result<bool, DoctorServiceError> {
     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
 
     let obj_id = match ObjectId::parse_str(&doctor_id) {
@@ -248,7 +249,7 @@ pub async fn create_doctor_schedule(
         if utils::check_date_is_24hr_in_future(&slot.start_time).is_ok() {
             continue;
         } else {
-            return Err(DoctorServiceError::Validation(
+            return Err(DoctorServiceError::ValidationError(
                 "Slot start time is not 24 hours ahead".to_string(),
             ));
         }

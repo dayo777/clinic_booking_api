@@ -4,6 +4,7 @@
 //! updating, and deleting patient documents in MongoDB.
 //!
 
+use crate::errors::PatientServiceError;
 use crate::models::{
     ContactInfo, CreatePatientDto, PaginationQuery, PatientDto, PatientResponseDto,
     UpdateContactInfoDto, UpdateInsuranceDto, UpdateMedicalAlertsDto,
@@ -11,9 +12,7 @@ use crate::models::{
 use crate::utils;
 use common::db::get_collection;
 use futures::stream::TryStreamExt;
-// use futures::StreamExt;
 use mongodb::bson::{doc, oid::ObjectId};
-use mongodb::error::Error as MongodbError;
 use mongodb::options::FindOptions;
 use mongodb::results::InsertOneResult;
 use tracing::{debug, info, instrument};
@@ -23,7 +22,9 @@ static PATIENT_COLLECTION: &str = "patients_table";
 static PATIENT_DELETED_COLLECTION: &str = "patient_deleted";
 
 #[instrument(name = "db_create_patient", skip(payload))]
-pub async fn create_patient(payload: CreatePatientDto) -> Result<InsertOneResult, MongodbError> {
+pub async fn create_patient(
+    payload: CreatePatientDto,
+) -> Result<InsertOneResult, PatientServiceError> {
     info!(
         "db_create_patient: Creating patient with name: {}",
         payload.name
@@ -57,13 +58,13 @@ pub async fn create_patient(payload: CreatePatientDto) -> Result<InsertOneResult
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
     // should probably use a proper identifier, but this should do as an example
     info!("Inserting new patient into DB for name: {}", payload.name);
-    collection.insert_one(new_patient).await
+    Ok(collection.insert_one(new_patient).await?)
 }
 
 #[instrument(name = "db_get_patient", skip(patient_id))]
 pub async fn get_single_patient(
     patient_id: String,
-) -> Result<Option<PatientResponseDto>, MongodbError> {
+) -> Result<Option<PatientResponseDto>, PatientServiceError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
 
     let obj_id = match ObjectId::parse_str(&patient_id) {
@@ -111,7 +112,7 @@ pub async fn patient_exists(patient_id: String) -> bool {
 #[instrument(name = "db_list_patients", skip(pagination))]
 pub async fn list_patient(
     pagination: PaginationQuery,
-) -> Result<Vec<PatientResponseDto>, MongodbError> {
+) -> Result<Vec<PatientResponseDto>, PatientServiceError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
 
     const DEFAULT_LIMIT: u64 = 15;
@@ -158,7 +159,7 @@ pub async fn list_patient(
 }
 
 #[instrument(name = "db_delete_patient", skip(patient_id))]
-pub async fn delete_patient(patient_id: String) -> Result<bool, MongodbError> {
+pub async fn delete_patient(patient_id: String) -> Result<bool, PatientServiceError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
     let archive_collection = get_collection::<PatientDto>(PATIENT_DELETED_COLLECTION);
 
@@ -201,7 +202,7 @@ pub async fn delete_patient(patient_id: String) -> Result<bool, MongodbError> {
 pub async fn update_patient_insurance(
     patient_id: String,
     insurance: UpdateInsuranceDto,
-) -> Result<bool, MongodbError> {
+) -> Result<bool, PatientServiceError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
 
     let obj_id = match ObjectId::parse_str(&patient_id) {
@@ -258,7 +259,7 @@ pub async fn update_patient_insurance(
 pub async fn update_patient_medical_alerts(
     patient_id: String,
     alerts: UpdateMedicalAlertsDto,
-) -> Result<bool, MongodbError> {
+) -> Result<bool, PatientServiceError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
 
     let obj_id = match ObjectId::parse_str(&patient_id) {
@@ -312,7 +313,7 @@ pub async fn update_patient_medical_alerts(
 pub async fn update_patient_contact_info(
     patient_id: String,
     contact_info: UpdateContactInfoDto,
-) -> Result<bool, MongodbError> {
+) -> Result<bool, PatientServiceError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
 
     let obj_id = match ObjectId::parse_str(&patient_id) {

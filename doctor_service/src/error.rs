@@ -8,6 +8,7 @@ use mongodb::error::Error as MongodbError;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::error;
+use validator::ValidationError;
 
 #[derive(Serialize)]
 struct ErrorResponse {
@@ -17,7 +18,9 @@ struct ErrorResponse {
 #[derive(Error, Debug)]
 pub enum DoctorServiceError {
     #[error("Validation error: {0}")]
-    Validation(String),
+    Validation(#[from] ValidationError), // for automatic conversion in handlers e.g., using `?`
+    #[error("Validation error: {0}")]
+    ValidationError(String), // for manual conversion in handlers
     #[error("Invalid doctor ID format")]
     InvalidDoctorId,
     #[error("Doctor not found")]
@@ -33,7 +36,9 @@ pub enum DoctorServiceError {
 impl ResponseError for DoctorServiceError {
     fn status_code(&self) -> StatusCode {
         match *self {
-            Self::Validation(_) | Self::InvalidDoctorId => StatusCode::BAD_REQUEST,
+            Self::Validation(_) | Self::ValidationError(_) | Self::InvalidDoctorId => {
+                StatusCode::BAD_REQUEST
+            }
             Self::DoctorNotFound => StatusCode::NOT_FOUND,
             Self::DoctorInactive(_) => StatusCode::FORBIDDEN,
             Self::Database(ref e) => {

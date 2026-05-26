@@ -12,6 +12,7 @@ futures = { workspace = true }
 validator = { workspace = true }
 strum = { workspace = true }
 chrono = { workspace = true }
+thiserror = { workspace = true }
 common = { path = "../common" } # internal workspace import
 
 [dev-dependencies]

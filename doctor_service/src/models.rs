@@ -120,8 +120,10 @@ impl<'de> Deserialize<'de> for Specialty {
 // Doctor create their own schedule which patient can book for.
 #[derive(Serialize, Deserialize, Debug, Validate, Clone)]
 pub struct ScheduleSlot {
+    #[serde(deserialize_with = "deserialize_bson_datetime_or_string")]
     pub start_time: BsonDateTime,
-    // this is an Option so we can make every Schedule 30min long
+    // this is an Option so we can make every Schedule 30min long by default unless otherwise set
+    #[serde(deserialize_with = "deserialize_option_bson_datetime_or_string")]
     pub end_time: Option<BsonDateTime>,
     // make this an Option so `ViewDoctorSchedule` can peek a ScheduleSlot
     pub is_available: Option<bool>, // changes to `False` once booked by a patient
@@ -131,7 +133,7 @@ pub struct ScheduleSlot {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoctorSchedule {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
-    pub id: Option<ObjectId>,
+    pub id: Option<ObjectId>, // scheduleID
     pub doctor_id: ObjectId,
     pub slots: Vec<ScheduleSlot>,
     #[serde(deserialize_with = "deserialize_bson_datetime_or_string")]

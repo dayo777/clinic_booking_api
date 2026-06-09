@@ -158,6 +158,7 @@ pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
     }
 }
 
+/// All handlers for handling Doctor schedules are defined below this line
 #[post("/{id}/create-schedule")]
 pub(crate) async fn create_doctor_schedule(
     path: web::Path<String>,
@@ -171,7 +172,7 @@ pub(crate) async fn create_doctor_schedule(
         .map(|s| models::ScheduleSlot {
             start_time: s.start_time,
             end_time: s.end_time,
-            is_available: Some(true),
+            is_available: Some(true), // automatically setting availability = true
         })
         .collect();
 

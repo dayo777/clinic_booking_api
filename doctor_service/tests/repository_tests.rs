@@ -33,8 +33,7 @@ mod doctor_repository_test {
             license_num: "DM-REPO-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
 
         // New doctors are inactive by default
         let doctor = repository::get_doctor(doctor_id.clone()).await.unwrap();
@@ -61,8 +60,7 @@ mod doctor_repository_test {
             license_num: "LIC-LIST-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
         repository::enable_doctor(doctor_id).await.unwrap();
 
         let pagination = PaginationQuery {
@@ -85,8 +83,7 @@ mod doctor_repository_test {
             license_num: "LIC-DEL-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
         repository::enable_doctor(doctor_id.clone()).await.unwrap();
 
         let deleted = repository::delete_doctor(doctor_id.clone()).await.unwrap();
@@ -120,8 +117,7 @@ mod doctor_repository_test {
             license_num: "LIC-EX-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
 
         // Should not exist yet because it's inactive
         assert!(!repository::doctor_exists(doctor_id.clone()).await);
@@ -145,8 +141,7 @@ mod doctor_repository_test {
             license_num: "LIC-SCH-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
         repository::enable_doctor(doctor_id.clone()).await.unwrap();
 
         use doctor_service::models::ScheduleSlot;
@@ -179,8 +174,7 @@ mod doctor_repository_test {
             license_num: "LIC-TIME-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
         repository::enable_doctor(doctor_id.clone()).await.unwrap();
 
         use doctor_service::models::ScheduleSlot;
@@ -210,8 +204,7 @@ mod doctor_repository_test {
                 specialties: vec![Specialty::Cardiology],
                 license_num: format!("LIC-PAG-{}", i),
             };
-            let insert_result = repository::create_doctor(payload).await.unwrap();
-            let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+            let doctor_id = repository::create_doctor(payload).await.unwrap();
             repository::enable_doctor(doctor_id).await.unwrap();
         }
 
@@ -260,8 +253,7 @@ mod doctor_repository_test {
             license_num: "LIC-INACT-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
 
         // New doctors are inactive by default, get_doctor should return None
         let doctor = repository::get_doctor(doctor_id).await.unwrap();

@@ -1,3 +1,4 @@
+/// Doctor Schedule is designed such that a Doctor can only have one ScheduleID
 mod error;
 pub mod handlers;
 pub mod models;
@@ -13,10 +14,11 @@ pub fn doctor_config_v1(cfg: &mut web::ServiceConfig) {
             .service(handlers::check_doctor_exists)
             .service(handlers::create_doctor)
             .service(handlers::get_doctor)
-            .service(handlers::list_doctors) // cont from here this not working
+            .service(handlers::list_doctors)
             .service(handlers::delete_doctor)
             .service(handlers::enable_doctor)
             .service(handlers::create_doctor_schedule)
+            .service(handlers::get_active_doctor_schedule)
             // .service(handlers::update_doctor)
             .default_service(
                 web::route()
@@ -25,3 +27,7 @@ pub fn doctor_config_v1(cfg: &mut web::ServiceConfig) {
             ),
     );
 }
+
+// TODO: test active-doctor-schedule endpoint
+// TODO: continue from the repository module on line 347
+// TODO: confirm the test for handler_test - Doctor active schedule is working

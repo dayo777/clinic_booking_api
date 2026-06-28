@@ -1,0 +1,13 @@
+target/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.md
+LICENSE
+docs/
+scripts/
+settings_dev.toml
+example_settings_dev.toml
+settings-example.toml
+audit.toml

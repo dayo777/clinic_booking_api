@@ -31,6 +31,8 @@ pub enum DoctorServiceError {
     Database(#[from] MongodbError),
     #[error("Internal error: {0}")]
     Internal(String),
+    #[error("Doctor already exists in schedule database")]
+    DoctorAlreadyExistInScheduleDatabase,
 }
 
 impl ResponseError for DoctorServiceError {
@@ -46,6 +48,7 @@ impl ResponseError for DoctorServiceError {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::DoctorAlreadyExistInScheduleDatabase => StatusCode::CONFLICT,
         }
     }
 

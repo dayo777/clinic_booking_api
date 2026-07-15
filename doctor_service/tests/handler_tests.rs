@@ -1,6 +1,7 @@
 // test the handler endpoints here
 
 mod setup_env;
+// use doctor_service::models;
 
 #[cfg(test)]
 mod doctor_service_handler_test {
@@ -11,6 +12,7 @@ mod doctor_service_handler_test {
         test,
     };
     use serde_json::json;
+    // use super::models; // this is from the Models imported on line 4
 
     async fn setup_integration_test() {
         // call the setup from the setup_env file
@@ -200,44 +202,106 @@ mod doctor_service_handler_test {
         let app = test::init_service(App::new().configure(doctor_service::doctor_config_v1)).await;
 
         // Create a doctor to delete
-        let unique_name = format!(
-            "Dr. Delete {}",
-            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
-        );
         let req_data = json!({
-            "name": unique_name,
+            "name": "Dru",
             "specialties": ["gp"],
-            "license_num": "LICDEL"
+            "license_num": "LIC-DEL"
         });
 
-        let create_req = test::TestRequest::post()
+        let req = test::TestRequest::post()
             .insert_header(ContentType::json())
             .insert_header(("x-api-version", "1"))
             .uri("/doctor")
-            .set_json(req_data)
+            .set_json(&req_data)
             .to_request();
 
-        let create_resp = test::call_service(&app, create_req).await;
+        // call & confirm Post success before proceeding
+        let create_resp = test::call_service(&app, req).await;
         assert_eq!(create_resp.status(), http::StatusCode::CREATED);
 
-        let doctor_id = {
-            let collection = common::db::get_collection::<doctor_service::models::DoctorResponseDto>(
-                "doctors_collection",
-            );
-            let filter = mongodb::bson::doc! { "name": &unique_name };
-            let doctor_doc = collection
-                .find_one(filter)
-                .await
-                .unwrap()
-                .expect("Doctor not found in DB");
-            doctor_doc.id.to_hex()
-        };
+        // get the DoctorID from the response
+        let doctor_id: serde_json::Value = test::read_body_json(create_resp).await;
+        let doctor_id = doctor_id
+            .as_str()
+            .unwrap()
+            .trim_start_matches("ObjectId(\"")
+            .trim_end_matches("\")");
+        // let doctor_id = doctor_id.to_string();
 
+        // run the delete request
         let delete_req = test::TestRequest::delete()
+            .insert_header(("x-api-version", "1"))
             .uri(&format!("/doctor/{}", doctor_id))
             .to_request();
 
         let delete_resp = test::call_service(&app, delete_req).await;
         assert_eq!(delete_resp.status(), http::StatusCode::NO_CONTENT);
+    }
+
+    #[actix_web::test]
+    async fn test_create_doctor_schedule_success() {
+        setup_integration_test().await;
+
+        let app = test::init_service(App::new().configure(doctor_service::doctor_config_v1)).await;
+
+        // first create a Doctor so we can have a DoctorId to work with
+        let req_data = json!({
+            "name": "Dr. House",
+            "specialties": ["gp"],
+            "license_num": "LIC99999"
+        });
+
+        let req = test::TestRequest::post()
+            .insert_header(ContentType::json())
+            .insert_header(("x-api-version", "1"))
+            .uri("/doctor")
+            .set_json(&req_data)
+            .to_request();
+
+        // call & confirm Post success before proceeding
+        let create_resp = test::call_service(&app, req).await;
+        assert_eq!(create_resp.status(), http::StatusCode::CREATED);
+
+        // get the DoctorID from the response
+        let doctor_id: serde_json::Value = test::read_body_json(create_resp).await;
+        let doctor_id = doctor_id
+            .as_str()
+            .unwrap()
+            .trim_start_matches("ObjectId(\"")
+            .trim_end_matches("\")");
+
+        println!("DoctorID: {}", doctor_id); // TODO: remove DoctorID
+
+        // Enable the doctor before creating a schedule
+        let enable_req = test::TestRequest::patch()
+            .insert_header(("x-api-version", "1"))
+            .uri(&format!("/doctor/{}/enable", doctor_id))
+            .to_request();
+        let enable_resp = test::call_service(&app, enable_req).await;
+        assert_eq!(enable_resp.status(), http::StatusCode::NO_CONTENT);
+
+        // create a schedule slot for doctorID
+        let req_data2 = json!([
+            {
+                "start_time": "2028-10-01T08:00:00Z",
+                "end_time": "2028-10-01T08:30:00Z"
+            },
+            {
+                "start_time": "2028-10-01T09:00:00Z",
+                "end_time": "2028-10-01T09:30:00Z"
+            }
+        ]);
+
+        let req2 = test::TestRequest::post()
+            .insert_header(ContentType::json())
+            .insert_header(("x-api-version", "1"))
+            .uri(format!("/doctor/{}/create-schedule", doctor_id).as_str())
+            .set_json(&req_data2)
+            .to_request();
+
+        // confirm the ScheduleSlot was successfully created
+        let resp2 = test::call_service(&app, req2).await;
+        eprintln!("Service-Response: {}", resp2.status());
+        assert_eq!(resp2.status(), http::StatusCode::OK);
     }
 }

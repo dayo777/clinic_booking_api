@@ -8,7 +8,7 @@ use common::db::get_collection;
 use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::options::FindOptions;
-use mongodb::results::InsertOneResult;
+// use mongodb::results::InsertOneResult;
 use tracing::{debug, info, instrument};
 
 // declare collections as represented in MongoDB here
@@ -18,9 +18,7 @@ static SCHEDULE_COLLECTION: &str = "doctor_schedule_collection";
 
 #[allow(clippy::redundant_pattern_matching)]
 #[instrument(name = "db_create_doctor", skip(payload))]
-pub async fn create_doctor(
-    payload: CreateDoctorDto,
-) -> Result<InsertOneResult, DoctorServiceError> {
+pub async fn create_doctor(payload: CreateDoctorDto) -> Result<String, DoctorServiceError> {
     info!(
         "db_create_doctor: Creating doctor with license: {}",
         payload.license_num
@@ -56,7 +54,9 @@ pub async fn create_doctor(
         payload.license_num
     );
 
-    Ok(collection.insert_one(new_doctor).await?)
+    let id = collection.insert_one(new_doctor).await?;
+    let id = id.inserted_id.to_string();
+    Ok(id)
 }
 
 #[instrument(name = "db_get_doctor", skip(doctor_id))]
@@ -75,7 +75,7 @@ pub async fn get_doctor(
 
     let filter = doc! { "_id": obj_id, "is_active": true };
 
-    info!("Executing MongoDB FindOne");
+    info!("Retrieving a single DoctorID");
     let doctor_doc = collection.find_one(filter).await?;
 
     Ok(doctor_doc.map(|d| DoctorResponseDto {
@@ -144,10 +144,10 @@ pub async fn delete_doctor(doctor_id: String) -> Result<bool, DoctorServiceError
         }
     };
 
+    // find the data to be deleted
     let filter = doc! { "_id": obj_id };
     let doctor_doc = collection.find_one(filter.clone()).await?;
 
-    // this ensures the Data exist before working on it
     // TODO: might have to add 'mut' here
     if let Some(_doctor) = doctor_doc {
         let modified_content = doc! {
@@ -217,7 +217,9 @@ pub async fn doctor_exists(doctor_id: String) -> bool {
     }
 }
 
-// Doctors use this endpoint to create their Schedule
+/// -----------------------
+/// Below this line contains code for Doctor-schedule creation
+// endpoint to create Doctor Schedule
 pub async fn create_doctor_schedule(
     doctor_id: String,
     slots: Vec<ScheduleSlot>,
@@ -241,6 +243,14 @@ pub async fn create_doctor_schedule(
             doctor_id
         );
         return Err(DoctorServiceError::DoctorNotFound);
+    }
+
+    // confirm the DoctorID exist in the Doctor schedule database
+    // If doctor exists, then update the existing schedule
+    // else skip this statement and create a new schedule
+    if check_if_doctor_exists_in_doctor_schedule(doctor_id.to_string()).await {
+        debug!("DoctorID already has existing schedule, update the existing schedule",);
+        return Err(DoctorServiceError::DoctorAlreadyExistInScheduleDatabase);
     }
 
     // confirm the Doctor booking is 24 hours ahead
@@ -272,13 +282,80 @@ pub async fn create_doctor_schedule(
     Ok(slots_to_return)
 }
 
-// pub async fn update_doctor_schedule(
-//     doctor_id: String,
-//     slots: Vec<ScheduleSlot>,
-// ) -> Result<(), MongodbError> {
-//     // TODO: update the Doctor Schedule as Patients book
-//     // first check if Doctor exist & is Active
-//     // then update the Doctor Schedule slot to False
+// Confirm Doctor ID exist in Doctor Schedule
+// 1. Once a DoctorID exists on this endpoint, other schedules should only be added to ID
+// 2. this is to prevent the same Doctor from being booked multiple times
+// true = Doctor exist in Doctor Schedule, false = Doctor not exist in Doctor Schedule
+#[instrument(name = "check_if_doctor_exists_in_doctor_schedule", skip(doctor_id))]
+pub async fn check_if_doctor_exists_in_doctor_schedule(doctor_id: String) -> bool {
+    let collection = get_collection::<DoctorDto>(SCHEDULE_COLLECTION);
+
+    let doctor_id = match ObjectId::parse_str(&doctor_id) {
+        Ok(id) => id,
+        Err(_) => return false,
+    };
+
+    let filter = doc! { "doctor_id": doctor_id };
+
+    match collection.count_documents(filter).await {
+        Ok(count) => count > 0,
+        Err(_) => false,
+    }
+}
+
+#[instrument(name = "db_get_doctor_schedule", skip(doctor_id))]
+pub async fn get_doctor_schedule(
+    doctor_id: String,
+) -> Result<Option<DoctorSchedule>, DoctorServiceError> {
+    let _ = doctor_id;
+    todo!("This is a placeholder for get_doctor_schedule")
+}
+pub async fn list_doctor_schedule() {
+    todo!("list the available active schedules for a Particular Doctor")
+}
+
+// to retrieve active Doctor schedules for appointment
+// this should be called from the Appointment-service
+#[instrument(name = "db_get_active_doctor_schedule", skip(doctor_id))]
+pub async fn get_active_doctor_schedule(
+    doctor_id: String,
+) -> Result<Option<Vec<ScheduleSlot>>, DoctorServiceError> {
+    let collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
+
+    let obj_id = match ObjectId::parse_str(&doctor_id) {
+        Ok(id) => id,
+        Err(e) => {
+            debug!("Invalid ObjectId format: {}", e);
+            return Ok(None);
+        }
+    };
+
+    let filter = doc! { "doctor_id": obj_id };
+
+    info!("Retrieving active Doctor Schedule for doctor_id");
+    let schedule = collection.find_one(filter).await?;
+
+    Ok(schedule.map(|s| {
+        s.slots
+            .into_iter()
+            .filter(|slot| slot.is_available == Some(true))
+            .collect()
+    }))
+}
+
+// TODO: You have to ensure the slot exists, and is on True before you can change to false
+// // this should be called from the appointments-service after an appointment is made
+// // changes the slot "availability" to false; meaning the slot is booked
+// #[instrument(name = "db_update_doctor_schedule", skip(doctor_id))]
+// pub async fn update_doctor_schedule(doctor_id: String) {
+//     let collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
 //
-//     todo!("Update the Doctor schedule here.")
+//     let obj_id = match ObjectId::parse_str(&doctor_id) {
+//         Ok(id) => id,
+//         Err(e) => {
+//             debug!("Invalid ObjectId format: {}", e);
+//             return Ok(None);
+//         }
+//     };
+//
 // }

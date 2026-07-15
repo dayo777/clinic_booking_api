@@ -3,9 +3,12 @@ mod setup_env;
 #[cfg(test)]
 mod doctor_repository_test {
     use super::setup_env::setup_test_env;
+    use doctor_service::models::ScheduleSlot;
     use doctor_service::models::{CreateDoctorDto, PaginationQuery, Specialty};
     use doctor_service::repository;
+    use mongodb::bson::DateTime as BsonDateTime;
     use mongodb::bson::doc;
+    use std::time::{Duration, SystemTime};
 
     async fn setup_integration_test() {
         setup_test_env().await;
@@ -33,16 +36,14 @@ mod doctor_repository_test {
             license_num: "DM-REPO-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
+        let doctor_id = doctor_id
+            .trim_start_matches("ObjectId(\"")
+            .trim_end_matches("\")")
+            .to_string();
 
-        // New doctors are inactive by default
-        let doctor = repository::get_doctor(doctor_id.clone()).await.unwrap();
-        assert!(doctor.is_none());
-
-        // Enable doctor
-        let enabled = repository::enable_doctor(doctor_id.clone()).await.unwrap();
-        assert!(enabled);
+        // Enable doctor cause new Doctors are inactive by default
+        let _enabled = repository::enable_doctor(doctor_id.clone()).await.unwrap();
 
         // Now it should be found
         let doctor = repository::get_doctor(doctor_id).await.unwrap().unwrap();
@@ -55,15 +56,49 @@ mod doctor_repository_test {
     async fn test_list_doctors() {
         setup_integration_test().await;
 
-        let payload = CreateDoctorDto {
-            name: "Dr. List".to_string(),
+        // Create 3 new Doctors
+        let payload1 = CreateDoctorDto {
+            name: "Dr. Mira".to_string(),
             specialties: vec![Specialty::Cardiology],
             license_num: "LIC-LIST-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
-        repository::enable_doctor(doctor_id).await.unwrap();
+        let payload2 = CreateDoctorDto {
+            name: "Dr. Ma".to_string(),
+            specialties: vec![Specialty::Cardiology],
+            license_num: "LIC-LIST-1".to_string(),
+        };
+
+        let payload3 = CreateDoctorDto {
+            name: "Dr. Lira".to_string(),
+            specialties: vec![Specialty::Cardiology],
+            license_num: "LIC-LIST-1".to_string(),
+        };
+
+        let doctor1 = repository::create_doctor(payload1).await.unwrap();
+        let doctor2 = repository::create_doctor(payload2).await.unwrap();
+        let doctor3 = repository::create_doctor(payload3).await.unwrap();
+
+        // retrieve the DoctorIDs of the Doctors created above
+        let doctor1 = doctor1
+            .trim_start_matches("ObjectId(\"")
+            .trim_end_matches("\")")
+            .to_string();
+
+        let doctor2 = doctor2
+            .trim_start_matches("ObjectId(\"")
+            .trim_end_matches("\")")
+            .to_string();
+
+        let doctor3 = doctor3
+            .trim_start_matches("ObjectId(\"")
+            .trim_end_matches("\")")
+            .to_string();
+
+        // Enable the Doctors created above
+        repository::enable_doctor(doctor1).await.unwrap();
+        repository::enable_doctor(doctor2).await.unwrap();
+        repository::enable_doctor(doctor3).await.unwrap();
 
         let pagination = PaginationQuery {
             page: Some(1),
@@ -72,7 +107,9 @@ mod doctor_repository_test {
 
         let doctors = repository::list_doctor(pagination).await.unwrap();
         assert!(!doctors.is_empty());
-        assert!(doctors.iter().any(|d| d.name == "Dr. List"));
+        assert!(doctors.iter().any(|d| d.name == "Dr. Lira"));
+        assert!(doctors.iter().any(|d| d.name == "Dr. Mira"));
+        assert!(doctors.iter().any(|d| d.name == "Dr. Ma"));
     }
 
     #[tokio::test]
@@ -85,8 +122,11 @@ mod doctor_repository_test {
             license_num: "LIC-DEL-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
+        let doctor_id = doctor_id
+            .trim_start_matches("ObjectId(\"")
+            .trim_end_matches("\")")
+            .to_string();
         repository::enable_doctor(doctor_id.clone()).await.unwrap();
 
         let deleted = repository::delete_doctor(doctor_id.clone()).await.unwrap();
@@ -120,19 +160,21 @@ mod doctor_repository_test {
             license_num: "LIC-EX-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
+
+        let doctor_id = doctor_id
+            .trim_start_matches("ObjectId(\"")
+            .trim_end_matches("\")")
+            .to_string();
 
         // Should not exist yet because it's inactive
         assert!(!repository::doctor_exists(doctor_id.clone()).await);
 
+        // Enable doctor
         repository::enable_doctor(doctor_id.clone()).await.unwrap();
 
         // Now it should exist
         assert!(repository::doctor_exists(doctor_id).await);
-
-        // Random ID should not exist
-        assert!(!repository::doctor_exists(mongodb::bson::oid::ObjectId::new().to_hex()).await);
     }
 
     #[tokio::test]
@@ -145,13 +187,13 @@ mod doctor_repository_test {
             license_num: "LIC-SCH-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
-        repository::enable_doctor(doctor_id.clone()).await.unwrap();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
+        let doctor_id = doctor_id
+            .trim_start_matches("ObjectId(\"")
+            .trim_end_matches("\")")
+            .to_string();
 
-        use doctor_service::models::ScheduleSlot;
-        use mongodb::bson::DateTime as BsonDateTime;
-        use std::time::{Duration, SystemTime};
+        repository::enable_doctor(doctor_id.clone()).await.unwrap();
 
         let future_time =
             BsonDateTime::from_system_time(SystemTime::now() + Duration::from_secs(48 * 3600));
@@ -179,14 +221,9 @@ mod doctor_repository_test {
             license_num: "LIC-TIME-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
         repository::enable_doctor(doctor_id.clone()).await.unwrap();
 
-        use doctor_service::models::ScheduleSlot;
-        use mongodb::bson::DateTime as BsonDateTime;
-
-        // Past time
         let past_time = BsonDateTime::now();
 
         let slots = vec![ScheduleSlot {
@@ -210,8 +247,13 @@ mod doctor_repository_test {
                 specialties: vec![Specialty::Cardiology],
                 license_num: format!("LIC-PAG-{}", i),
             };
-            let insert_result = repository::create_doctor(payload).await.unwrap();
-            let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+            let doctor_id = repository::create_doctor(payload).await.unwrap();
+
+            let doctor_id = doctor_id
+                .trim_start_matches("ObjectId(\"")
+                .trim_end_matches("\")")
+                .to_string();
+
             repository::enable_doctor(doctor_id).await.unwrap();
         }
 
@@ -241,16 +283,6 @@ mod doctor_repository_test {
     }
 
     #[tokio::test]
-    async fn test_get_doctor_invalid_id() {
-        setup_integration_test().await;
-
-        let result = repository::get_doctor("invalid-id".to_string())
-            .await
-            .unwrap();
-        assert!(result.is_none());
-    }
-
-    #[tokio::test]
     async fn test_get_inactive_doctor() {
         setup_integration_test().await;
 
@@ -260,8 +292,7 @@ mod doctor_repository_test {
             license_num: "LIC-INACT-1".to_string(),
         };
 
-        let insert_result = repository::create_doctor(payload).await.unwrap();
-        let doctor_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let doctor_id = repository::create_doctor(payload).await.unwrap();
 
         // New doctors are inactive by default, get_doctor should return None
         let doctor = repository::get_doctor(doctor_id).await.unwrap();

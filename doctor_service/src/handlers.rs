@@ -46,9 +46,9 @@ pub(crate) async fn create_doctor(payload: web::Json<models::CreateDoctorDto>) -
 
     let dto = payload.into_inner();
     match repository::create_doctor(dto).await {
-        Ok(_) => {
+        Ok(doctor_id) => {
             info!("Doctor registration successful");
-            HttpResponse::Created().finish()
+            HttpResponse::Created().json(doctor_id)
         }
         Err(e) => {
             error!(error =%e, "Doctor registration failed");
@@ -123,11 +123,11 @@ pub(crate) async fn delete_doctor(path: web::Path<String>) -> HttpResponse {
     match repository::delete_doctor(id).await {
         Ok(true) => {
             info!("Doctor set to inactive/deletion");
-            HttpResponse::NoContent().finish()
+            HttpResponse::NoContent().json(true)
         }
         Ok(false) => {
             info!("Doctor not found or already inactive");
-            HttpResponse::NotFound().finish()
+            HttpResponse::NotFound().json(false)
         }
         Err(e) => {
             debug!(cause = %e, "Failed to deactivate doctor");
@@ -138,6 +138,7 @@ pub(crate) async fn delete_doctor(path: web::Path<String>) -> HttpResponse {
 
 // change the value of 'is_active' to true
 #[patch("/{id}/enable")]
+#[instrument(name = "enable_doctor_request", skip(path))]
 pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
     let id = path.into_inner();
     info!("Processing doctor enablement handler for ID: {}", &id);
@@ -158,7 +159,11 @@ pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
     }
 }
 
+/// -------------
+/// All handlers for handling Doctor schedules are defined below this line
+/// Design is in such that a Doctor can only have one ScheduleID
 #[post("/{id}/create-schedule")]
+#[instrument(name = "create_schedule_request", skip(payload))]
 pub(crate) async fn create_doctor_schedule(
     path: web::Path<String>,
     payload: web::Json<Vec<models::ScheduleSlot>>,
@@ -171,7 +176,7 @@ pub(crate) async fn create_doctor_schedule(
         .map(|s| models::ScheduleSlot {
             start_time: s.start_time,
             end_time: s.end_time,
-            is_available: Some(true),
+            is_available: Some(true), // automatically setting availability = true
         })
         .collect();
 
@@ -183,6 +188,32 @@ pub(crate) async fn create_doctor_schedule(
         Err(e) => {
             debug!("Unable to create Doctor Schedule: {:?}", e);
             e.error_response()
+        }
+    }
+}
+
+// get both active & non-active
+pub async fn get_full_doctor_schedule() {
+    todo!("get the Doctor schedule for a Particular Doctor")
+}
+
+#[get("/{id}/active-doctor-schedule")]
+#[instrument(name = "get_active_schedule_request", fields(doctor_id = %path))]
+pub async fn get_active_doctor_schedule(path: web::Path<String>) -> HttpResponse {
+    info!("Retrieving doctor schedule information");
+
+    match repository::get_active_doctor_schedule(path.into_inner()).await {
+        Ok(Some(schedule_slots)) => {
+            info!("Retrieved doctor schedule successful");
+            HttpResponse::Ok().json(schedule_slots)
+        }
+        Ok(None) => {
+            info!("Doctor not found");
+            HttpResponse::NotFound().finish()
+        }
+        Err(e) => {
+            debug!(cause = %e, "Failed to retrieve doctor data");
+            HttpResponse::InternalServerError().finish()
         }
     }
 }

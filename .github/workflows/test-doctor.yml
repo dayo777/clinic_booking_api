@@ -31,10 +31,29 @@ jobs:
         with:
           cache-workdir: "."
 
-      - name: Pre-pull test images
+      - name: Cache Docker images
+        id: cache-docker
+        uses: actions/cache@v4
+        with:
+          path: /tmp/docker-images
+          key: ${{ runner.os }}-docker-${{ hashFiles('.github/workflows/test-doctor.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
+      - name: Load cached Docker images
+        if: steps.cache-docker.outputs.cache-hit == 'true'
         run: |
+          docker load -i /tmp/docker-images/mongo.tar || true
+          docker load -i /tmp/docker-images/jaeger.tar || true
+
+      - name: Pre-pull test images
+        if: steps.cache-docker.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/docker-images
           docker pull mongo:8.3-rc-noble
           docker pull jaegertracing/jaeger:2.14.1
+          docker save -o /tmp/docker-images/mongo.tar mongo:8.3-rc-noble
+          docker save -o /tmp/docker-images/jaeger.tar jaegertracing/jaeger:2.14.1
 
       - name: Run Tests for doctor_service_handlers
         run: cargo test -p doctor_service -- --test-threads=1

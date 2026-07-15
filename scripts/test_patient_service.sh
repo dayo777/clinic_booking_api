@@ -1,19 +1,22 @@
 #!/bin/bash
 
 # This script runs tests for the patient_service.
-# It should be executed from the project root.
+# Reason for deleting containers is, testing was creating too many containers on my local machine
 
-set -e
-
+set +e
 echo "Running tests for patient_service..."
 
 # run all test cases in Patient service
 cargo test -p patient_service -- --test-threads=1
+TEST_EXIT_CODE=$?
 
-## Run cargo test for the patient_service handlers
-#cargo test -p patient_service --test handler_tests -- --test-threads=1
-#
-## Run cargo test for the patient_service repository
-#cargo test -p patient_service --test repository_tests -- --test-threads=1
+# Delete all containers created by testcontainers
+echo "Cleaning up containers..."
+docker ps -a --filter "label=org.testcontainers.managed-by=testcontainers" -q | xargs -r docker rm -f
+
+if [ $TEST_EXIT_CODE -ne 0 ]; then
+    echo "Tests failed with exit code $TEST_EXIT_CODE"
+    exit $TEST_EXIT_CODE
+fi
 
 echo "All tests for patient_service passed!"

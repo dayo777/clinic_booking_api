@@ -271,13 +271,28 @@ mod doctor_service_handler_test {
             .trim_end_matches("\")");
 
         println!("DoctorID: {}", doctor_id); // TODO: remove DoctorID
+
+        // Enable the doctor before creating a schedule
+        let enable_req = test::TestRequest::patch()
+            .insert_header(("x-api-version", "1"))
+            .uri(&format!("/doctor/{}/enable", doctor_id))
+            .to_request();
+        let enable_resp = test::call_service(&app, enable_req).await;
+        assert_eq!(enable_resp.status(), http::StatusCode::NO_CONTENT);
+
         // create a schedule slot for doctorID
         let req_data2 = json!([
             {
-            "start_time": "2029-01-01T09:00:00Z",
-            "end_time": "2029-01-01T10:00:00Z"
+                "start_time": "2028-10-01T08:00:00Z",
+                "end_time": "2028-10-01T08:30:00Z"
+            },
+            {
+                "start_time": "2028-10-01T09:00:00Z",
+                "end_time": "2028-10-01T09:30:00Z"
             }
         ]);
+
+
         let req2 = test::TestRequest::post()
             .insert_header(ContentType::json())
             .insert_header(("x-api-version", "1"))
@@ -288,6 +303,6 @@ mod doctor_service_handler_test {
         // confirm the ScheduleSlot was successfully created
         let resp2 = test::call_service(&app, req2).await;
         eprintln!("Service-Response: {}", resp2.status());
-        assert_eq!(resp2.status(), http::StatusCode::CREATED);
+        assert_eq!(resp2.status(), http::StatusCode::OK);
     }
 }

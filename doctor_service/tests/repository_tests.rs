@@ -3,13 +3,12 @@ mod setup_env;
 #[cfg(test)]
 mod doctor_repository_test {
     use super::setup_env::setup_test_env;
+    use doctor_service::models::ScheduleSlot;
     use doctor_service::models::{CreateDoctorDto, PaginationQuery, Specialty};
     use doctor_service::repository;
-    use mongodb::bson::doc;
-    use doctor_service::models::ScheduleSlot;
     use mongodb::bson::DateTime as BsonDateTime;
+    use mongodb::bson::doc;
     use std::time::{Duration, SystemTime};
-
 
     async fn setup_integration_test() {
         setup_test_env().await;

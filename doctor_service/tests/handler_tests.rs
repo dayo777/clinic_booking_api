@@ -292,7 +292,6 @@ mod doctor_service_handler_test {
             }
         ]);
 
-
         let req2 = test::TestRequest::post()
             .insert_header(ContentType::json())
             .insert_header(("x-api-version", "1"))

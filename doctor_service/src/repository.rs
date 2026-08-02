@@ -314,7 +314,7 @@ pub async fn list_doctor_schedule() {
     todo!("list the available active schedules for a Particular Doctor")
 }
 
-// to retrieve active Doctor schedules for appointment
+// to retrieve active Doctor schedules for appointment,
 // this should be called from the Appointment-service
 #[instrument(name = "db_get_active_doctor_schedule", skip(doctor_id))]
 pub async fn get_active_doctor_schedule(
@@ -343,19 +343,41 @@ pub async fn get_active_doctor_schedule(
     }))
 }
 
-// TODO: You have to ensure the slot exists, and is on True before you can change to false
-// // this should be called from the appointments-service after an appointment is made
-// // changes the slot "availability" to false; meaning the slot is booked
-// #[instrument(name = "db_update_doctor_schedule", skip(doctor_id))]
-// pub async fn update_doctor_schedule(doctor_id: String) {
-//     let collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
-//
-//     let obj_id = match ObjectId::parse_str(&doctor_id) {
-//         Ok(id) => id,
-//         Err(e) => {
-//             debug!("Invalid ObjectId format: {}", e);
-//             return Ok(None);
-//         }
-//     };
-//
-// }
+// this is called from the `Appointments-service` after an appointment is made
+// changes the selected ScheduleSlot 'is_available' to false, meaning the slot is booked/usedUp
+// the `get_active_doctor_schedule` function above already confirmed the Schedule is_available
+#[instrument(name = "db_update_doctor_schedule", skip(doctor_id))]
+pub async fn update_doctor_schedule_to_false(
+    doctor_id: String,
+    schedule_slot: ScheduleSlot
+) -> Result<ScheduleSlot, DoctorServiceError> {
+    let collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
+
+
+    let obj_id = match ObjectId::parse_str(&doctor_id) {
+        Ok(id) => id,
+        Err(e) => {
+            debug!("Invalid ObjectId format: {}", e);
+            return Err(DoctorServiceError::DoctorNotFound);
+        }
+    };
+
+    let filter = doc! { "doctor_id": obj_id };
+    let schedule = collection.find_one(filter.clone()).await?;
+
+    if let Some(_schedule) = schedule {
+        let modified_content = doc! {
+            "$set": {
+                "slots.$[slot].is_available": false,
+                "updated_at": mongodb::bson::DateTime::now(),
+            }
+        };
+
+        collection.update_one(filter, modified_content).await?;
+        info!("Doctor {} Schedule availability updated", doctor_id);
+        Ok(schedule_slot)
+    } else {
+        debug!("Doctor {} Schedule not found", doctor_id);
+        Err(DoctorServiceError::DoctorNotFound)
+    }
+}

@@ -1,4 +1,4 @@
-//! Always ensure to start the Jaegar & MongoDB service
+//! Always ensure to start Jaegar for logging & allow your IP on MongoDB Atlas
 use actix_web::guard::{Guard, GuardContext};
 use actix_web::middleware::{NormalizePath, TrailingSlash};
 use actix_web::{App, HttpServer, Responder, web};

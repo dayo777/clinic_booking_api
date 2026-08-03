@@ -248,8 +248,10 @@ name = "appointment_service"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "common",
  "mongodb",
  "serde",
+ "tracing",
  "validator",
 ]
 
@@ -625,9 +627,11 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "serde",
+ "strum",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "validator",
 ]
 
 [[package]]

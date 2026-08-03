@@ -2,6 +2,7 @@
 
 use crate::{models, repository};
 use actix_web::{HttpResponse, ResponseError, delete, get, head, patch, post, web};
+use common::models::ScheduleSlot;
 use tracing::{debug, error, info, instrument};
 use validator::Validate;
 
@@ -159,21 +160,23 @@ pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
     }
 }
 
-/// -------------
-/// All handlers for handling Doctor schedules are defined below this line
-/// Design is in such that a Doctor can only have one ScheduleID
+// -------------
+// All handlers for handling Doctor schedules are defined below this line
+// Design is in such that a Doctor can only have one ScheduleID
+// Doctors should be able to create their Schedules, Patient can view for booking
 #[post("/{id}/create-schedule")]
 #[instrument(name = "create_schedule_request", skip(payload))]
 pub(crate) async fn create_doctor_schedule(
     path: web::Path<String>,
-    payload: web::Json<Vec<models::ScheduleSlot>>,
+    payload: web::Json<Vec<ScheduleSlot>>,
 ) -> HttpResponse {
     let doctor_id = path.into_inner();
 
-    let slots: Vec<models::ScheduleSlot> = payload
+    let slots: Vec<ScheduleSlot> = payload
         .into_inner()
         .into_iter()
-        .map(|s| models::ScheduleSlot {
+        .map(|s| ScheduleSlot {
+            slot_id: s.slot_id,
             start_time: s.start_time,
             end_time: s.end_time,
             is_available: Some(true), // automatically setting availability = true

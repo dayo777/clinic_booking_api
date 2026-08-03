@@ -1,7 +1,4 @@
-// use crate::models::{DoctorDto, DayOfWeek};
-// use chrono::{DateTime, Datelike, Timelike, Utc};
-// use std::str::FromStr;
-use crate::models::Specialty;
+use common::models::Specialty;
 use mongodb::bson::DateTime as BsonDateTime;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};

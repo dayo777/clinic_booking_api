@@ -1,10 +1,11 @@
 // Database operations: insert, find_by_id, find_by_email, etc.
 use crate::error::DoctorServiceError;
 use crate::models::{
-    CreateDoctorDto, DoctorDto, DoctorResponseDto, DoctorSchedule, PaginationQuery, ScheduleSlot,
+    CreateDoctorDto, DoctorDto, DoctorResponseDto, DoctorSchedule, PaginationQuery,
 };
 use crate::utils;
 use common::db::get_collection;
+use common::models::ScheduleSlot;
 use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::options::FindOptions;
@@ -36,7 +37,7 @@ pub async fn create_doctor(payload: CreateDoctorDto) -> Result<String, DoctorSer
     let license_num = payload.license_num.clone();
 
     let new_doctor = DoctorDto {
-        id: None,
+        doctor_id: None,
         name,
         specialties,
         license_num,
@@ -79,7 +80,7 @@ pub async fn get_doctor(
     let doctor_doc = collection.find_one(filter).await?;
 
     Ok(doctor_doc.map(|d| DoctorResponseDto {
-        id: d.id.unwrap_or_else(ObjectId::new),
+        doctor_id: d.doctor_id.unwrap_or_else(ObjectId::new),
         name: d.name,
         specialties: d.specialties,
         license_num: d.license_num,
@@ -121,7 +122,7 @@ pub async fn list_doctor(
 
     while let Some(d) = cursor.try_next().await? {
         doctors.push(DoctorResponseDto {
-            id: d.id.unwrap_or_else(ObjectId::new),
+            doctor_id: d.doctor_id.unwrap_or_else(ObjectId::new),
             name: d.name,
             specialties: d.specialties,
             license_num: d.license_num,
@@ -268,7 +269,7 @@ pub async fn create_doctor_schedule(
     let slots_to_return = slots.clone();
     let booking_collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
     let new_booking = DoctorSchedule {
-        id: None,
+        schedule_id: None,
         doctor_id,
         slots,
         created_at: mongodb::bson::DateTime::now(),
@@ -349,10 +350,9 @@ pub async fn get_active_doctor_schedule(
 #[instrument(name = "db_update_doctor_schedule", skip(doctor_id))]
 pub async fn update_doctor_schedule_to_false(
     doctor_id: String,
-    schedule_slot: ScheduleSlot
+    schedule_slot: ScheduleSlot,
 ) -> Result<ScheduleSlot, DoctorServiceError> {
     let collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
-
 
     let obj_id = match ObjectId::parse_str(&doctor_id) {
         Ok(id) => id,

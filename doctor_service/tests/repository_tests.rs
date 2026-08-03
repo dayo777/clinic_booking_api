@@ -3,11 +3,12 @@ mod setup_env;
 #[cfg(test)]
 mod doctor_repository_test {
     use super::setup_env::setup_test_env;
-    use doctor_service::models::ScheduleSlot;
-    use doctor_service::models::{CreateDoctorDto, PaginationQuery, Specialty};
+    use common::models::{ScheduleSlot, Specialty};
+    use doctor_service::models::{CreateDoctorDto, PaginationQuery};
     use doctor_service::repository;
     use mongodb::bson::DateTime as BsonDateTime;
     use mongodb::bson::doc;
+    use mongodb::bson::oid::ObjectId;
     use std::time::{Duration, SystemTime};
 
     async fn setup_integration_test() {
@@ -199,6 +200,7 @@ mod doctor_repository_test {
             BsonDateTime::from_system_time(SystemTime::now() + Duration::from_secs(48 * 3600));
 
         let slots = vec![ScheduleSlot {
+            slot_id: Some(ObjectId::new()),
             start_time: future_time,
             end_time: None,
             is_available: Some(true),
@@ -227,6 +229,7 @@ mod doctor_repository_test {
         let past_time = BsonDateTime::now();
 
         let slots = vec![ScheduleSlot {
+            slot_id: Some(ObjectId::new()),
             start_time: past_time,
             end_time: None,
             is_available: Some(true),

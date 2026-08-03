@@ -158,7 +158,7 @@ mod doctor_service_handler_test {
                 .await
                 .unwrap()
                 .expect("Doctor not found in DB");
-            doctor_doc.id.to_hex()
+            doctor_doc.doctor_id.to_hex()
         };
 
         // Enable the doctor

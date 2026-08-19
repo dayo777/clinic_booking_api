@@ -6,6 +6,7 @@ use crate::models::{
 use crate::utils;
 use common::db::get_collection;
 use common::models::ScheduleSlot;
+use common::utils::{generate_id, validate_specialty};
 use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::options::FindOptions;
@@ -15,7 +16,8 @@ use tracing::{debug, info, instrument};
 // declare collections as represented in MongoDB here
 static DOCTOR_COLLECTION: &str = "doctors_collection";
 // use this to store the Doctor's schedule, prevent endpoint always hitting main Doctor table
-static SCHEDULE_COLLECTION: &str = "doctor_schedule_collection";
+pub static SCHEDULE_COLLECTION: &str = "doctor_schedule_collection";
+static ID_LENGTH: u8 = 24; // this is the length of the generated ID
 
 #[allow(clippy::redundant_pattern_matching)]
 #[instrument(name = "db_create_doctor", skip(payload))]
@@ -28,7 +30,7 @@ pub async fn create_doctor(payload: CreateDoctorDto) -> Result<String, DoctorSer
     // confirm the Doctor specialties are valid
     let specialties = payload.specialties.clone();
     for specialty in specialties.iter() {
-        if let Err(e) = utils::validate_specialty(specialty.to_string()) {
+        if let Err(e) = validate_specialty(specialty) {
             return Err(DoctorServiceError::Validation(e));
         }
     }
@@ -36,16 +38,18 @@ pub async fn create_doctor(payload: CreateDoctorDto) -> Result<String, DoctorSer
     let name = payload.name.clone();
     let license_num = payload.license_num.clone();
 
+    let doctor_id = generate_id("doc", ID_LENGTH);
+
     let new_doctor = DoctorDto {
-        doctor_id: None,
+        doctor_id,
         name,
         specialties,
         license_num,
         schedule: None,
         created_at: mongodb::bson::DateTime::now(),
         updated_at: None,
-        // new doctor object is auto set 'is_active' to false
-        // there is a separate endpoint to make is_active
+        // the new doctor object is auto-set 'is_active' to false.
+        // there is a separate endpoint to enable is_active to true
         is_active: false,
     };
 
@@ -56,36 +60,40 @@ pub async fn create_doctor(payload: CreateDoctorDto) -> Result<String, DoctorSer
     );
 
     let id = collection.insert_one(new_doctor).await?;
-    let id = id.inserted_id.to_string();
+    let id = id
+        .inserted_id
+        .as_str()
+        .ok_or(DoctorServiceError::Internal(
+            "Failed to extract inserted ID".to_string(),
+        ))?
+        .to_string();
     Ok(id)
 }
 
+// rem this only retrieves doctors with 'is_active' = true
 #[instrument(name = "db_get_doctor", skip(doctor_id))]
 pub async fn get_doctor(
     doctor_id: String,
 ) -> Result<Option<DoctorResponseDto>, DoctorServiceError> {
     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
 
-    let obj_id = match ObjectId::parse_str(&doctor_id) {
-        Ok(id) => id,
-        Err(e) => {
-            debug!("Invalid ObjectId format: {}", e);
-            return Ok(None);
-        }
-    };
-
-    let filter = doc! { "_id": obj_id, "is_active": true };
+    // confirm the DoctorID exist & is active
+    let filter = doc! { "_id": &doctor_id, "is_active": true };
 
     info!("Retrieving a single DoctorID");
     let doctor_doc = collection.find_one(filter).await?;
 
-    Ok(doctor_doc.map(|d| DoctorResponseDto {
-        doctor_id: d.doctor_id.unwrap_or_else(ObjectId::new),
-        name: d.name,
-        specialties: d.specialties,
-        license_num: d.license_num,
-        is_active: d.is_active,
-    }))
+    if let Some(d) = doctor_doc {
+        Ok(Some(DoctorResponseDto {
+            doctor_id: d.doctor_id,
+            name: d.name,
+            specialties: d.specialties,
+            license_num: d.license_num,
+            is_active: d.is_active,
+        }))
+    } else {
+        Ok(None)
+    }
 }
 
 #[instrument(name = "db_list_doctors", skip(pagination))]
@@ -122,7 +130,7 @@ pub async fn list_doctor(
 
     while let Some(d) = cursor.try_next().await? {
         doctors.push(DoctorResponseDto {
-            doctor_id: d.doctor_id.unwrap_or_else(ObjectId::new),
+            doctor_id: d.doctor_id,
             name: d.name,
             specialties: d.specialties,
             license_num: d.license_num,
@@ -137,16 +145,8 @@ pub async fn list_doctor(
 pub async fn delete_doctor(doctor_id: String) -> Result<bool, DoctorServiceError> {
     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
 
-    let obj_id = match ObjectId::parse_str(&doctor_id) {
-        Ok(id) => id,
-        Err(e) => {
-            debug!("Invalid ObjectId format: {}", e);
-            return Ok(false);
-        }
-    };
-
     // find the data to be deleted
-    let filter = doc! { "_id": obj_id };
+    let filter = doc! { "_id": &doctor_id };
     let doctor_doc = collection.find_one(filter.clone()).await?;
 
     // TODO: might have to add 'mut' here
@@ -172,48 +172,51 @@ pub async fn delete_doctor(doctor_id: String) -> Result<bool, DoctorServiceError
 pub async fn enable_doctor(doctor_id: String) -> Result<bool, DoctorServiceError> {
     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
 
-    let obj_id = match ObjectId::parse_str(&doctor_id) {
-        Ok(id) => id,
-        Err(e) => {
-            debug!("Invalid ObjectId format: {}", e);
-            return Ok(false);
-        }
-    };
+    let filter = doc! { "_id": &doctor_id };
+    let doc_update = doc! { "$set":  doc! {
+        "is_active": true,
+        "updated_at": mongodb::bson::DateTime::now(),
+    }};
+    let result = collection
+        .find_one_and_update(filter, doc_update)
+        .return_document(mongodb::options::ReturnDocument::After)
+        .await
+        .map_err(|e| DoctorServiceError::Internal(e.to_string()))?;
 
-    let filter = doc! { "_id": obj_id };
-    let doctor_doc = collection.find_one(filter.clone()).await?;
-
-    if let Some(_doctor) = doctor_doc {
-        let modified_content = doc! {
-            "$set": {
-                "is_active": true,
-                "updated_at": mongodb::bson::DateTime::now(),
-            }
-        };
-
-        collection.update_one(filter, modified_content).await?;
-
-        info!("Doctor status changed to enabled: {}", doctor_id);
+    if let Some(_d) = result {
         Ok(true)
     } else {
-        debug!("Doctor not found or already enabled: {}", doctor_id);
         Ok(false)
     }
+
+    // let doctor_doc = collection.find_one(filter.clone()).await?;
+    //
+    // if let Some(_doctor) = doctor_doc {
+    //     let modified_content = doc! {
+    //         "$set": {
+    //             "is_active": true,
+    //             "updated_at": mongodb::bson::DateTime::now(),
+    //         }
+    //     };
+    //
+    //     collection.update_one(filter, modified_content).await?;
+    //
+    //     info!("Doctor status changed to enabled: {}", doctor_id);
+    //     Ok(true)
+    // } else {
+    //     debug!("Doctor not found or already enabled: {}", doctor_id);
+    //     Ok(false)
+    // }
 }
 
 #[instrument(name = "db_doctor_exists", skip(doctor_id))]
 pub async fn doctor_exists(doctor_id: String) -> bool {
     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
+    let filter = doc! { "_id": &doctor_id, "is_active": true };
 
-    let obj_id = match ObjectId::parse_str(&doctor_id) {
-        Ok(id) => id,
-        Err(_) => return false,
-    };
-
-    let filter = doc! { "_id": obj_id, "is_active": true };
-
-    match collection.count_documents(filter).await {
-        Ok(count) => count > 0,
+    match collection.find_one(filter).await {
+        Ok(Some(_)) => true,
+        Ok(None) => false,
         Err(_) => false,
     }
 }
@@ -227,18 +230,9 @@ pub async fn create_doctor_schedule(
 ) -> Result<Vec<ScheduleSlot>, DoctorServiceError> {
     // call the Doctor exists to confirm the Doctor is Active,
     // then go ahead with Booking the Slot
-    // Write code below
-
-    let doctor_id = match ObjectId::parse_str(&doctor_id) {
-        Ok(id) => id,
-        Err(e) => {
-            debug!("Invalid ObjectId format: {}", e);
-            return Err(DoctorServiceError::DoctorNotFound);
-        }
-    };
 
     // confirm the DoctorID exist & is active
-    if !doctor_exists(doctor_id.to_string()).await {
+    if !doctor_exists(doctor_id.clone()).await {
         debug!(
             "Unable to create Doctor schedule, Invalid Doctor-Id: {}",
             doctor_id
@@ -249,7 +243,7 @@ pub async fn create_doctor_schedule(
     // confirm the DoctorID exist in the Doctor schedule database
     // If doctor exists, then update the existing schedule
     // else skip this statement and create a new schedule
-    if check_if_doctor_exists_in_doctor_schedule(doctor_id.to_string()).await {
+    if check_if_doctor_exists_in_doctor_schedule(doctor_id.clone()).await {
         debug!("DoctorID already has existing schedule, update the existing schedule",);
         return Err(DoctorServiceError::DoctorAlreadyExistInScheduleDatabase);
     }
@@ -266,17 +260,28 @@ pub async fn create_doctor_schedule(
         }
     }
 
+    // let doctor_id = match ObjectId::parse_str(&doctor_id) {
+    //     Ok(id) => id,
+    //     Err(e) => {
+    //         debug!("Invalid ObjectId format: {}", e);
+    //         return Err(DoctorServiceError::DoctorNotFound);
+    //     }
+    // };
+
+    let schedule_id = generate_id("sch", ID_LENGTH);
+    info!(
+        "Inserting new booking into DB for doctor_id: {}",
+        doctor_id.clone()
+    );
+
     let slots_to_return = slots.clone();
     let booking_collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
     let new_booking = DoctorSchedule {
-        schedule_id: None,
+        schedule_id,
         doctor_id,
         slots,
-        created_at: mongodb::bson::DateTime::now(),
-        updated_at: None,
     };
 
-    info!("Inserting new booking into DB for doctor_id: {}", doctor_id);
     booking_collection.insert_one(new_booking).await?;
 
     // front-end can change use this to display Specific date/time information for use

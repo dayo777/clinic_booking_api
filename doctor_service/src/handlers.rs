@@ -3,6 +3,7 @@
 use crate::{models, repository};
 use actix_web::{HttpResponse, ResponseError, delete, get, head, patch, post, web};
 use common::models::ScheduleSlot;
+use mongodb::bson::DateTime as BsonDateTime;
 use tracing::{debug, error, info, instrument};
 use validator::Validate;
 
@@ -42,7 +43,7 @@ pub(crate) async fn create_doctor(payload: web::Json<models::CreateDoctorDto>) -
             "Error saving Doctor details."
         };
 
-        return HttpResponse::BadRequest().body(error_message);
+        return HttpResponse::BadRequest().body(error_message.to_string());
     }
 
     let dto = payload.into_inner();
@@ -162,9 +163,9 @@ pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
 
 // -------------
 // All handlers for handling Doctor schedules are defined below this line
-// Design is in such that a Doctor can only have one ScheduleID
+// Design is structured such that a Doctor can only have one ScheduleID
 // Doctors should be able to create their Schedules, Patient can view for booking
-#[post("/{id}/create-schedule")]
+#[post("/{id}/create-doctor-schedule")]
 #[instrument(name = "create_schedule_request", skip(payload))]
 pub(crate) async fn create_doctor_schedule(
     path: web::Path<String>,
@@ -180,6 +181,8 @@ pub(crate) async fn create_doctor_schedule(
             start_time: s.start_time,
             end_time: s.end_time,
             is_available: Some(true), // automatically setting availability = true
+            created_at: Some(BsonDateTime::now()),
+            updated_at: None,
         })
         .collect();
 

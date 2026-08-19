@@ -1,5 +1,5 @@
 /// Doctor Schedule is designed such that a Doctor can only have one ScheduleID
-mod error;
+pub(crate) mod error;
 pub mod handlers;
 pub mod models;
 pub mod repository;

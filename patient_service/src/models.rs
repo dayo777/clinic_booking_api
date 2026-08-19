@@ -7,7 +7,7 @@ use chrono::NaiveDate;
 use common::utils::{
     deserialize_bson_datetime_or_string, deserialize_option_bson_datetime_or_string,
 };
-use mongodb::bson::{DateTime as BsonDateTime, oid::ObjectId};
+use mongodb::bson::DateTime as BsonDateTime;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 use validator::Validate;
@@ -15,8 +15,8 @@ use validator::Validate;
 // Dto = Data Object
 #[derive(Serialize, Deserialize, Debug, Validate)]
 pub(crate) struct PatientDto {
-    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
-    pub(crate) id: Option<ObjectId>,
+    #[serde(rename = "_id")]
+    pub(crate) patient_id: String,
 
     // Identity Information
     pub(crate) name: String,
@@ -57,7 +57,8 @@ pub struct CreatePatientDto {
 // use this to return calls for Patient Data
 #[derive(Serialize, Debug)]
 pub struct PatientResponseDto {
-    pub id: ObjectId,
+    #[serde(rename = "_id")]
+    pub patient_id: String,
     pub name: String,
     pub age: u8,
     pub dob: NaiveDate,

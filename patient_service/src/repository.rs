@@ -11,8 +11,9 @@ use crate::models::{
 };
 use crate::utils;
 use common::db::get_collection;
+use common::utils::generate_id;
 use futures::stream::TryStreamExt;
-use mongodb::bson::{doc, oid::ObjectId};
+use mongodb::bson::doc;
 use mongodb::options::FindOptions;
 use mongodb::results::InsertOneResult;
 use tracing::{debug, info, instrument};
@@ -20,6 +21,7 @@ use tracing::{debug, info, instrument};
 // declare Collections as represented in MongoDB collection
 static PATIENT_COLLECTION: &str = "patients_table";
 static PATIENT_DELETED_COLLECTION: &str = "patient_deleted";
+static ID_LENGTH: u8 = 24; // matches MongoDB ID lenght
 
 #[instrument(name = "db_create_patient", skip(payload))]
 pub async fn create_patient(
@@ -39,9 +41,10 @@ pub async fn create_patient(
         emergency_contact_phone: payload.contact_info.emergency_contact_phone,
     };
     let gender = payload.gender;
+    let patient_id = generate_id("pat", ID_LENGTH);
 
     let new_patient = PatientDto {
-        id: None,
+        patient_id,
         name: payload.name.clone(),
         age,
         dob,
@@ -67,21 +70,13 @@ pub async fn get_single_patient(
 ) -> Result<Option<PatientResponseDto>, PatientServiceError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
 
-    let obj_id = match ObjectId::parse_str(&patient_id) {
-        Ok(id) => id,
-        Err(e) => {
-            debug!("Invalid ObjectId format: {}", e);
-            return Ok(None);
-        }
-    };
-
-    let filter = doc! { "_id": obj_id, "is_active": true };
+    let filter = doc! { "_id": patient_id.clone(), "is_active": true };
 
     info!("Executing MongoDB FindOne");
     let patient_doc = collection.find_one(filter).await?;
 
     Ok(patient_doc.map(|p| PatientResponseDto {
-        id: p.id.unwrap_or_else(ObjectId::new),
+        patient_id,
         name: p.name,
         age: p.age,
         dob: p.dob,
@@ -96,12 +91,7 @@ pub async fn get_single_patient(
 pub async fn patient_exists(patient_id: String) -> bool {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
 
-    let obj_id = match ObjectId::parse_str(&patient_id) {
-        Ok(id) => id,
-        Err(_) => return false,
-    };
-
-    let filter = doc! { "_id": obj_id, "is_active": true };
+    let filter = doc! { "_id": patient_id.clone(), "is_active": true };
 
     match collection.count_documents(filter).await {
         Ok(count) => count > 0,
@@ -144,7 +134,7 @@ pub async fn list_patient(
 
     while let Some(p) = cursor.try_next().await? {
         patients.push(PatientResponseDto {
-            id: p.id.unwrap_or_else(ObjectId::new),
+            patient_id: p.patient_id,
             name: p.name,
             age: p.age,
             dob: p.dob,
@@ -163,15 +153,7 @@ pub async fn delete_patient(patient_id: String) -> Result<bool, PatientServiceEr
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
     let archive_collection = get_collection::<PatientDto>(PATIENT_DELETED_COLLECTION);
 
-    let obj_id = match ObjectId::parse_str(&patient_id) {
-        Ok(id) => id,
-        Err(e) => {
-            debug!("Invalid ObjectId format for deletion: {}", e);
-            return Ok(false);
-        }
-    };
-
-    let filter = doc! { "_id": obj_id, "is_active": true };
+    let filter = doc! { "_id": patient_id.clone(), "is_active": true };
 
     // 1. Find the patient
     let patient_doc = collection.find_one(filter.clone()).await?;
@@ -205,14 +187,6 @@ pub async fn update_patient_insurance(
 ) -> Result<bool, PatientServiceError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
 
-    let obj_id = match ObjectId::parse_str(&patient_id) {
-        Ok(id) => id,
-        Err(e) => {
-            debug!("Invalid ObjectId format: {}", e);
-            return Ok(false);
-        }
-    };
-
     let mut update_doc = doc! {};
 
     if let Some(provider) = insurance.provider_name {
@@ -234,7 +208,7 @@ pub async fn update_patient_insurance(
 
     update_doc.insert("updated_at", mongodb::bson::DateTime::now());
 
-    let filter = doc! { "_id": obj_id, "is_active": true };
+    let filter = doc! { "_id": patient_id.clone(), "is_active": true };
 
     // Ensure the insurance field is an object if it's currently null or missing
     // We use a separate update to ensure the structure is correct before applying dot-notation
@@ -244,7 +218,7 @@ pub async fn update_patient_insurance(
     // it means insurance exists but is null.
 
     let unset_null_insurance = doc! { "$set": { "insurance": {} } };
-    let filter_null = doc! { "_id": obj_id, "is_active": true, "insurance": null };
+    let filter_null = doc! { "_id": patient_id, "is_active": true, "insurance": null };
     let _ = collection
         .update_one(filter_null, unset_null_insurance)
         .await?;
@@ -261,14 +235,6 @@ pub async fn update_patient_medical_alerts(
     alerts: UpdateMedicalAlertsDto,
 ) -> Result<bool, PatientServiceError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
-
-    let obj_id = match ObjectId::parse_str(&patient_id) {
-        Ok(id) => id,
-        Err(e) => {
-            debug!("Invalid ObjectId format: {}", e);
-            return Ok(false);
-        }
-    };
 
     let mut update_doc = doc! {};
 
@@ -291,11 +257,11 @@ pub async fn update_patient_medical_alerts(
 
     update_doc.insert("updated_at", mongodb::bson::DateTime::now());
 
-    let filter = doc! { "_id": obj_id, "is_active": true };
+    let filter = doc! { "_id": patient_id.clone(), "is_active": true };
 
     // Ensure medical_alerts field is an object if it's currently null or missing
     let unset_null_alerts = doc! { "$set": { "medical_alerts": {} } };
-    let filter_null = doc! { "_id": obj_id, "is_active": true, "medical_alerts": null };
+    let filter_null = doc! { "_id": patient_id, "is_active": true, "medical_alerts": null };
     let _ = collection
         .update_one(filter_null, unset_null_alerts)
         .await?;
@@ -315,14 +281,6 @@ pub async fn update_patient_contact_info(
     contact_info: UpdateContactInfoDto,
 ) -> Result<bool, PatientServiceError> {
     let collection = get_collection::<PatientDto>(PATIENT_COLLECTION);
-
-    let obj_id = match ObjectId::parse_str(&patient_id) {
-        Ok(id) => id,
-        Err(e) => {
-            debug!("Invalid ObjectId format: {}", e);
-            return Ok(false);
-        }
-    };
 
     let mut update_doc = doc! {};
 
@@ -348,7 +306,7 @@ pub async fn update_patient_contact_info(
 
     update_doc.insert("updated_at", mongodb::bson::DateTime::now());
 
-    let filter = doc! { "_id": obj_id, "is_active": true };
+    let filter = doc! { "_id": patient_id.clone(), "is_active": true };
 
     let update = doc! { "$set": update_doc };
     let result = collection.update_one(filter, update).await?;

@@ -204,6 +204,8 @@ mod doctor_repository_test {
             start_time: future_time,
             end_time: None,
             is_available: Some(true),
+            created_at: Some(BsonDateTime::now()),
+            updated_at: None,
         }];
 
         let result = repository::create_doctor_schedule(doctor_id, slots.clone()).await;
@@ -233,6 +235,8 @@ mod doctor_repository_test {
             start_time: past_time,
             end_time: None,
             is_available: Some(true),
+            created_at: Some(BsonDateTime::now()),
+            updated_at: None,
         }];
 
         let result = repository::create_doctor_schedule(doctor_id, slots).await;

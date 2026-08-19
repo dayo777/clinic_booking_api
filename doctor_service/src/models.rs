@@ -1,5 +1,6 @@
 // use chrono::NaiveDate;
 use common::models::{ScheduleSlot, Specialty};
+use common::utils::validate_specialties;
 use common::utils::{
     deserialize_bson_datetime_or_string, deserialize_option_bson_datetime_or_string,
 };
@@ -10,8 +11,8 @@ use validator::Validate;
 // Dto = Data Object
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct DoctorDto {
-    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
-    pub(crate) doctor_id: Option<ObjectId>,
+    #[serde(rename = "_id")]
+    pub(crate) doctor_id: String,
     pub(crate) name: String,
 
     // specialties
@@ -33,7 +34,7 @@ pub(crate) struct DoctorDto {
 pub struct CreateDoctorDto {
     #[validate(length(min = 3, max = 100))]
     pub name: String,
-    #[validate(custom(function = "crate::utils::validate_specialties"))]
+    #[validate(custom(function = "validate_specialties"))]
     pub specialties: Vec<Specialty>,
     #[validate(length(min = 5, max = 20))]
     pub license_num: String,
@@ -43,7 +44,7 @@ pub struct CreateDoctorDto {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoctorResponseDto {
     #[serde(rename = "_id")]
-    pub doctor_id: ObjectId,
+    pub doctor_id: String,
     pub name: String,
     pub specialties: Vec<Specialty>,
     pub license_num: String,
@@ -64,14 +65,10 @@ pub struct PaginationQuery {
 // separate collection for storing Doctor schedules
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoctorSchedule {
-    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
-    pub schedule_id: Option<ObjectId>,
-    pub doctor_id: ObjectId,
+    #[serde(rename = "_id")]
+    pub schedule_id: String,
+    pub doctor_id: String,
     pub slots: Vec<ScheduleSlot>,
-    #[serde(deserialize_with = "deserialize_bson_datetime_or_string")]
-    pub created_at: BsonDateTime,
-    #[serde(deserialize_with = "deserialize_option_bson_datetime_or_string")]
-    pub updated_at: Option<BsonDateTime>,
 }
 
 // use this to peep if a Doctor is available for a given slot

@@ -1,0 +1,179 @@
+# TODO: confirm this later
+# GitLab CI/CD replicating the GitHub Actions workflows in .github/workflows/
+# - audit.yml        -> audit (manual)
+# - lint.yml         -> fmt, clippy
+# - test-doctor.yml  -> test-doctor
+# - test-patient.yml -> test-patient
+# - build.yml        -> build (Docker build & push on main + version tags)
+
+stages:
+  - lint
+  - test
+  - build
+  - audit
+
+# Cancel in-progress pipelines on the same ref when new commits are pushed
+# (equivalent of GitHub Actions `concurrency` with cancel-in-progress: true)
+default:
+  interruptible: true
+
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  CARGO_TERM_COLOR: "always"
+  DOCKER_IMAGE_NAME: "dayo777/clinic-booking-api"
+
+# Reusable cargo cache (equivalent of setup-rust-toolchain caching)
+.cargo-cache: &cargo-cache
+  key:
+    files:
+      - Cargo.lock
+  paths:
+    - .cargo/registry/index
+    - .cargo/registry/cache
+    - target
+  policy: pull-push
+
+# Shared rules for lint jobs: push to dev/feature/* and MRs targeting dev/feature/*/main
+.lint-rules: &lint-rules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^feature\//)'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH =~ /^feature\//)'
+
+# ---------------------------------------------------------------------------
+# Lint (lint.yml): RustFmt then Clippy
+# ---------------------------------------------------------------------------
+fmt:
+  stage: lint
+  image: rust:latest
+  <<: *lint-rules
+  cache:
+    <<: *cargo-cache
+    policy: pull
+  script:
+    - rustup component add rustfmt
+    - cargo fmt --all -- --check
+
+clippy:
+  stage: lint
+  image: rust:latest
+  needs: [fmt]
+  <<: *lint-rules
+  cache: *cargo-cache
+  script:
+    - rustup component add clippy
+    - cargo clippy --all-targets --all-features -- -D warnings
+
+# ---------------------------------------------------------------------------
+# Tests (test-doctor.yml / test-patient.yml)
+# Docker-in-Docker is used so testcontainers (mongo, jaeger) can run.
+# ---------------------------------------------------------------------------
+.test-base: &test-base
+  stage: test
+  image: rust:latest
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+    TESTCONTAINERS_HOST_OVERRIDE: "docker"
+  cache: *cargo-cache
+  before_script:
+    # Install docker CLI to pre-pull the test images (equivalent of "Pre-pull test images")
+    - apt-get update -qq && apt-get install -y -qq docker.io > /dev/null
+    - docker pull mongo:8.3-rc-noble
+    - docker pull jaegertracing/jaeger:2.14.1
+
+test-doctor:
+  <<: *test-base
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+      changes:
+        - doctor_service/**/*
+        - common/**/*
+        - Cargo.toml
+        - Cargo.lock
+        - .gitlab-ci.yml
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH =~ /^feature\//)'
+      changes:
+        - doctor_service/**/*
+        - common/**/*
+        - Cargo.toml
+        - Cargo.lock
+        - .gitlab-ci.yml
+  script:
+    - cargo test -p doctor_service -- --test-threads=1
+
+test-patient:
+  <<: *test-base
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+      changes:
+        - patient_service/**/*
+        - common/**/*
+        - Cargo.toml
+        - Cargo.lock
+        - .gitlab-ci.yml
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH =~ /^feature\//)'
+      changes:
+        - patient_service/**/*
+        - common/**/*
+        - Cargo.toml
+        - Cargo.lock
+        - .gitlab-ci.yml
+  script:
+    - cargo test -p patient_service -- --test-threads=1
+
+# ---------------------------------------------------------------------------
+# Build & Push Docker image (build.yml)
+# Runs on pushes to main and on v*.*.* tags.
+# Requires CI/CD variables: DOCKERHUB_USERNAME, DOCKERHUB_PASSWORD
+# ---------------------------------------------------------------------------
+build:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+  before_script:
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  script:
+    # Replicate docker/metadata-action tags: branch ref, sha, and semver patterns
+    - |
+      TAGS="-t $DOCKER_IMAGE_NAME:sha-${CI_COMMIT_SHORT_SHA}"
+      if [ -n "$CI_COMMIT_BRANCH" ]; then
+        TAGS="$TAGS -t $DOCKER_IMAGE_NAME:${CI_COMMIT_BRANCH}"
+      fi
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        VERSION="${CI_COMMIT_TAG#v}"
+        MAJOR="${VERSION%%.*}"
+        MINOR="${VERSION#*.}"; MINOR="${MINOR%%.*}"
+        TAGS="$TAGS -t $DOCKER_IMAGE_NAME:${VERSION} -t $DOCKER_IMAGE_NAME:${MAJOR}.${MINOR} -t $DOCKER_IMAGE_NAME:${MAJOR}"
+      fi
+      docker build \
+        --label "org.opencontainers.image.title=clinic_booking_api" \
+        --label "org.opencontainers.image.description=This is a sample BackEnd API for demonstration" \
+        --label "org.opencontainers.image.vendor=Tikva LLC" \
+        $TAGS .
+    - docker push --all-tags "$DOCKER_IMAGE_NAME"
+
+# ---------------------------------------------------------------------------
+# Audit dependencies (audit.yml) — manual trigger, configured via audit.toml
+# ---------------------------------------------------------------------------
+audit:
+  stage: audit
+  image: rust:latest
+  # workflow_dispatch equivalent: run manually from the GitLab UI
+  rules:
+    - when: manual
+      allow_failure: true
+  cache:
+    <<: *cargo-cache
+    policy: pull
+  script:
+    - cargo install cargo-audit --locked
+    - cargo audit

@@ -1,12 +1,13 @@
-#![allow(dead_code)]
 // who booked, when, conflict-detection, slot-segregation, cancellation/resecheduling
+// use crate::utils::deserialize_specialty_from_string;
 use common::models::Specialty;
+use common::utils::validate_specialty;
 use mongodb::bson::{DateTime as BsonDateTime, oid::ObjectId};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Validate)]
-pub struct Appointment {
+pub struct AppointmentDto {
     #[serde(rename = "_id")]
     pub appointment_id: ObjectId,
     pub slot_id: ObjectId, // linked to the specific slot in DoctorSchedule
@@ -15,8 +16,9 @@ pub struct Appointment {
     pub start_time: BsonDateTime,
     pub end_time: BsonDateTime,
     pub specialty: Specialty,
-    pub notes: Option<String>,
     pub status: AppointmentStatus,
+    pub status_history: Vec<AppointmentStatusHistoryDto>,
+    pub notes: Option<String>,
     pub created_at: BsonDateTime,
     pub updated_at: Option<BsonDateTime>,
 }
@@ -27,15 +29,25 @@ pub enum AppointmentStatus {
     Confirmed, // assigned when a Doctor confirms an appointment
     Canceled,  // assigned when a Doctor cancels an appointment
     Completed, // assigned when an appointment is concluded
+    NoShow,    // assigned when patient does not show up
 }
 
-#[derive(Deserialize, Validate, Debug)]
+#[derive(Serialize, Validate, Debug, Deserialize)]
 pub struct CreateAppointmentDto {
-    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
-    pub appointment_id: Option<ObjectId>,
-    pub slot_id: ObjectId, // Mandatory ref to a Doctor's slot
-    pub doctor_id: ObjectId,
-    pub patient_id: ObjectId,
+    #[validate(length(min = 5))]
+    pub slot_id: String, // mandatory ref to a Doctor's slot
+    #[validate(length(min = 5))]
+    pub doctor_id: String,
+    #[validate(length(min = 5))]
+    pub patient_id: String,
+    #[validate(custom(function = "validate_specialty"))]
     pub specialty: Specialty,
     pub notes: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AppointmentStatusHistoryDto {
+    pub status: AppointmentStatus,
+    pub changed_at: BsonDateTime,
+    pub reason: Option<String>, // optional note e.g. "Patient canceled"
 }

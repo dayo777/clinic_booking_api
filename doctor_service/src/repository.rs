@@ -5,9 +5,10 @@ use crate::models::{
 };
 use crate::utils;
 use common::db::get_collection;
-use common::models::ScheduleSlot;
+use common::models::{CreateScheduleSlot, ScheduleSlot};
 use common::utils::{generate_id, validate_specialty};
 use futures::stream::TryStreamExt;
+use mongodb::bson::DateTime as BsonDateTime;
 use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::options::FindOptions;
 // use mongodb::results::InsertOneResult;
@@ -226,8 +227,8 @@ pub async fn doctor_exists(doctor_id: String) -> bool {
 // endpoint to create Doctor Schedule
 pub async fn create_doctor_schedule(
     doctor_id: String,
-    slots: Vec<ScheduleSlot>,
-) -> Result<Vec<ScheduleSlot>, DoctorServiceError> {
+    slots: Vec<CreateScheduleSlot>,
+) -> Result<String, DoctorServiceError> {
     // call the Doctor exists to confirm the Doctor is Active,
     // then go ahead with Booking the Slot
 
@@ -260,6 +261,18 @@ pub async fn create_doctor_schedule(
         }
     }
 
+    let slots_ids: Vec<ScheduleSlot> = slots
+        .into_iter()
+        .map(|s| ScheduleSlot {
+            slot_id: generate_id("slot", ID_LENGTH),
+            start_time: s.start_time,
+            end_time: s.end_time,
+            is_available: true,
+            created_at: BsonDateTime::now(),
+            updated_at: None,
+        })
+        .collect();
+
     // let doctor_id = match ObjectId::parse_str(&doctor_id) {
     //     Ok(id) => id,
     //     Err(e) => {
@@ -269,23 +282,22 @@ pub async fn create_doctor_schedule(
     // };
 
     let schedule_id = generate_id("sch", ID_LENGTH);
-    info!(
-        "Inserting new booking into DB for doctor_id: {}",
-        doctor_id.clone()
-    );
 
-    let slots_to_return = slots.clone();
+    // let slots_to_return = slots.clone();
     let booking_collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
     let new_booking = DoctorSchedule {
-        schedule_id,
-        doctor_id,
-        slots,
+        schedule_id: schedule_id.clone(),
+        doctor_id: doctor_id.clone(),
+        slots: slots_ids,
     };
-
+    info!(
+        "Inserting new schedule into DB for doctor_id: {}",
+        doctor_id
+    );
     booking_collection.insert_one(new_booking).await?;
 
     // front-end can change use this to display Specific date/time information for use
-    Ok(slots_to_return)
+    Ok(schedule_id)
 }
 
 // Confirm Doctor ID exist in Doctor Schedule
@@ -327,24 +339,28 @@ pub async fn get_active_doctor_schedule(
     doctor_id: String,
 ) -> Result<Option<Vec<ScheduleSlot>>, DoctorServiceError> {
     let collection = get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION);
+    //
+    // let obj_id = match ObjectId::parse_str(&doctor_id) {
+    //     Ok(id) => id,
+    //     Err(e) => {
+    //         debug!("Invalid ObjectId format: {}", e);
+    //         return Ok(None);
+    //     }
+    // };
 
-    let obj_id = match ObjectId::parse_str(&doctor_id) {
-        Ok(id) => id,
-        Err(e) => {
-            debug!("Invalid ObjectId format: {}", e);
-            return Ok(None);
-        }
-    };
-
-    let filter = doc! { "doctor_id": obj_id };
+    let filter = doc! { "doctor_id": doctor_id };
 
     info!("Retrieving active Doctor Schedule for doctor_id");
-    let schedule = collection.find_one(filter).await?;
+    let schedule = collection
+        .find_one(filter)
+        .await
+        .map_err(|_| DoctorServiceError::UnableToRetrieveDoctorSchedule)?;
 
     Ok(schedule.map(|s| {
         s.slots
-            .into_iter()
-            .filter(|slot| slot.is_available == Some(true))
+            .iter()
+            .filter(|slot| slot.is_available)
+            .cloned()
             .collect()
     }))
 }

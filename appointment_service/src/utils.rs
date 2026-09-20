@@ -1,38 +1,25 @@
 use crate::error::AppointmentScheduleError;
 use common::models::ScheduleSlot;
-use mongodb::bson::oid::ObjectId;
-
-// check to make sure the booking date is at least 24 hours in the future
-// pub(crate) fn check_date_is_24hr_in_future(
-//     booking_date: &BsonDateTime,
-// ) -> Result<(), ValidationError> {
-//     let twenty_four_hour_from_now =
-//         BsonDateTime::from_system_time(SystemTime::now() + Duration::from_secs(86400));
-//
-//     if *booking_date < twenty_four_hour_from_now {
-//         return Err(ValidationError::new(
-//             "Booking date must be at least 24 hours in the future",
-//         ));
-//     }
-//
-//     Ok(())
-// }
 
 // verify that the SlotID exist in the Doctor ScheduleSlot, and is_available is set to true
 pub(crate) fn verify_slot_id_exist<'a>(
     slot_id: &str,
     available_slots: &'a [ScheduleSlot],
 ) -> Result<&'a ScheduleSlot, AppointmentScheduleError> {
-    let obj_id =
-        ObjectId::parse_str(slot_id).map_err(|_| AppointmentScheduleError::InvalidSlotId)?;
+    // let obj_id = ObjectId::parse_str(slot_id).map_err(|_| AppointmentScheduleError::InvalidSlotId)?;
+
+    // let slot = available_slots
+    //     .iter()
+    //     .find(|slot: &&ScheduleSlot| slot.slot_id.as_ref().is_some_and(|id: &String| id == slot_id))
+    //     .ok_or(AppointmentScheduleError::AppointmentNotFound)?;
 
     let slot = available_slots
         .iter()
-        .find(|slot| slot.slot_id == Some(obj_id))
+        .find(|s| s.slot_id.as_str() == slot_id)
         .ok_or(AppointmentScheduleError::AppointmentNotFound)?;
 
     // confirm the slot is_available
-    if slot.is_available != Some(true) {
+    if !slot.is_available {
         return Err(AppointmentScheduleError::UnableToScheduleAppointment);
     }
 

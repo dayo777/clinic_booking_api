@@ -10,7 +10,12 @@ stages:
   - lint
   - test
   - build
-  - audit
+  - package
+  - deploy
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
 
 # Cancel in-progress pipelines on the same ref when new commits are pushed
 # (equivalent of GitHub Actions `concurrency` with cancel-in-progress: true)
@@ -21,6 +26,7 @@ variables:
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   CARGO_TERM_COLOR: "always"
   DOCKER_IMAGE_NAME: "dayo777/clinic-booking-api"
+  RUST_VERSION: "1.96.0"
 
 # Reusable cargo cache (equivalent of setup-rust-toolchain caching)
 .cargo-cache: &cargo-cache

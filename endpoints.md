@@ -12,7 +12,7 @@ Required header for the current version: `x-api-version: 1`
 - `GET localhost:8080/api` - Homepage ✅ [Try endpoint](#homepage)
 
 ### Patient Service
-- `HEAD /api/patient/{id}` - Check if patient exists ✅ [Try endpoint](#check-patient-existence)
+- `HEAD /api/patient/{id}` - Check if a patient exists ✅ [Try endpoint](#check-patient-existence)
 - `GET /api/patient` - List all patients (supports `page` and `limit` query params) ✅ [Try endpoint](#list-patients-with-pagination)
 - `POST /api/patient` - Register a new patient ✅ [Try endpoint](#create-patient)
 - `GET /api/patient/{id}` - Get patient details ✅ [Try endpoint](#retrieve-a-single-patient)
@@ -22,7 +22,7 @@ Required header for the current version: `x-api-version: 1`
 - `PUT /api/patient/{id}/contact` - Update patient contact information ✅ [Try-endpoint](#update-patient-contact-info)
 
 ### Doctor Service
-- `HEAD /api/doctor/{id}` - Check if doctor exists ✅ [Try endpoint](#check-doctor-existence)
+- `HEAD /api/doctor/{id}` - Check if a doctor exists ✅ [Try endpoint](#check-doctor-existence)
 - `POST /api/doctor` - Create a new doctor ✅ [Try endpoint](#create-doctor)
 - `GET /api/doctor/{id}` - Get doctor details ✅ [Try endpoint](#retrieve-a-single-doctor)
 - `GET /api/doctor` - List all doctors (supports `page` and `limit` query params) ✅ [Try endpoint](#list-doctors-with-pagination)
@@ -31,9 +31,12 @@ Required header for the current version: `x-api-version: 1`
 - `POST /api/doctor/{id}/create-schedule` - Create a doctor schedule ✅ [Try endpoint](#create-doctor-schedule)
 
 ### Appointment Service (⏳)
-- `GET /api/appointments` - List all appointments
-
----
+- `POST /api/appointment` - Create a new appointment [Try endpoint](#create-a-new-appointment)
+- `GET /api/appointment/{id}` - Get a single appointment detail [Try endpoint](#get-a-single-appointment)
+- `GET /api/appointment/patient/{patient_id}` - List all appointments for a particular patient [Try endpoint](#list-appointments-for-a-patient)
+- `GET /api/appointment/doctor/{doctor_id}` - List all appointments for a particular doctor [Try endpoint](#list-appointments-for-a-doctor)
+- `PATCH /api/appointment/{id}/confirm` - Confirm an appointment [Try endpoint](#confirm-appointment)
+- `PATCH /api/appointment/{id}/cancel` - Cancel an appointment [Try endpoint](#cancel-appointment)
 
 ## Available Endpoints using the Cmdline
 
@@ -202,4 +205,57 @@ curl -X POST http://localhost:8080/api/doctor/{id}/create-schedule} \
         "end_time": "2026-10-01T09:30:00Z"
     }
 ]'
+```
+
+---
+### Appointment Service
+
+#### Create a new Appointment
+To create a new appointment.
+```bash
+curl -X POST http://localhost:8080/api/appointment \
+     -H "Content-Type: application/json" \
+     -H "x-api-version: 1" \
+     -d '{
+            "slot_id": "slot_617c96cff9b9f1ddd65",
+            "doctor_id": "doc_b617df81ec12e9b6a651",
+            "patient_id": "pat_56df17fc9e814a512552",
+             "specialty": "derm",
+             "notes": "having some skin issues, like eczema or something. Its getting worse."
+}'
+```
+
+#### Get a Single Appointment
+To retrieve a single appointment by the AppointmentID
+```bash
+curl -X GET http://localhost:8080/api/appointment/{id} \
+     -H "x-api-version: 1" 
+```
+
+#### List Appointments for a Patient
+To retrieve all appointments for a patient
+```bash
+curl -X GET http://localhost:8080/api/appointment/patient/{patient_id} \
+    -H "x-api-version: 1"
+```
+
+#### List Appointments for a Doctor
+To retrieve all appointments for a doctor
+```bash
+curl -X GET http://localhost:8080/api/appointment/doctor/{doctor_id} \
+    -H "x-api-version: 1"
+```
+
+#### Confirm Appointment
+To confirm an appointment (used by the Doctor)
+```bash
+curl -X PATCH http://localhost:8080/api/appointment/{id}/confirm \
+    -H "x-api-version: 1"
+```
+
+#### Cancel Appointment
+To cancel an appointment (used by the Doctor)
+```bash
+curl -X PATCH http://localhost:8080/api/appointment/{id}/cancel \
+    -H "x-api-version:
 ```

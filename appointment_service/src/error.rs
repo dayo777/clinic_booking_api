@@ -21,8 +21,6 @@ pub enum AppointmentScheduleError {
     Validation(#[from] ValidationError), // for automatic conversion in handlers e.g., using `?`
     #[error("Invalid doctor ID format")]
     InvalidDoctorId,
-    #[error("Invalid Patient ID format")]
-    InvalidPatientId,
     #[error("Invalid Slot ID format")]
     InvalidSlotId,
     #[error("Unable to find appointment")]
@@ -38,10 +36,9 @@ pub enum AppointmentScheduleError {
 impl ResponseError for AppointmentScheduleError {
     fn status_code(&self) -> StatusCode {
         match *self {
-            Self::Validation(_)
-            | Self::InvalidDoctorId
-            | Self::InvalidPatientId
-            | Self::InvalidSlotId => StatusCode::BAD_REQUEST,
+            Self::Validation(_) | Self::InvalidDoctorId | Self::InvalidSlotId => {
+                StatusCode::BAD_REQUEST
+            }
             Self::Database(ref e) => {
                 error!("Database error: {:?}", e);
                 StatusCode::INTERNAL_SERVER_ERROR

@@ -3,12 +3,11 @@ mod setup_env;
 #[cfg(test)]
 mod doctor_repository_test {
     use super::setup_env::setup_test_env;
-    use common::models::{ScheduleSlot, Specialty};
+    use common::models::{CreateScheduleSlot, Specialty};
     use doctor_service::models::{CreateDoctorDto, PaginationQuery};
     use doctor_service::repository;
     use mongodb::bson::DateTime as BsonDateTime;
     use mongodb::bson::doc;
-    use mongodb::bson::oid::ObjectId;
     use std::time::{Duration, SystemTime};
 
     async fn setup_integration_test() {
@@ -199,20 +198,15 @@ mod doctor_repository_test {
         let future_time =
             BsonDateTime::from_system_time(SystemTime::now() + Duration::from_secs(48 * 3600));
 
-        let slots = vec![ScheduleSlot {
-            slot_id: Some(ObjectId::new()),
+        let slots = vec![CreateScheduleSlot {
             start_time: future_time,
             end_time: None,
-            is_available: Some(true),
-            created_at: Some(BsonDateTime::now()),
-            updated_at: None,
         }];
 
         let result = repository::create_doctor_schedule(doctor_id, slots.clone()).await;
-        assert!(result.is_ok());
-        let returned_slots = result.unwrap();
-        assert_eq!(returned_slots.len(), 1);
-        assert_eq!(returned_slots[0].is_available, Some(true));
+        assert!(result.is_ok()); // confirm the Schedule-ID is returned
+        let schedule_id = result.unwrap();
+        assert_eq!(schedule_id.len(), 24); // confirm the Schedule-ID returned is 24 characters long
     }
 
     #[tokio::test]
@@ -230,16 +224,12 @@ mod doctor_repository_test {
 
         let past_time = BsonDateTime::now();
 
-        let slots = vec![ScheduleSlot {
-            slot_id: Some(ObjectId::new()),
+        let schedule = vec![CreateScheduleSlot {
             start_time: past_time,
             end_time: None,
-            is_available: Some(true),
-            created_at: Some(BsonDateTime::now()),
-            updated_at: None,
         }];
 
-        let result = repository::create_doctor_schedule(doctor_id, slots).await;
+        let result = repository::create_doctor_schedule(doctor_id, schedule).await;
         assert!(result.is_err());
     }
 

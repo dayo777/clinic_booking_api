@@ -2,8 +2,7 @@
 
 use crate::{models, repository};
 use actix_web::{HttpResponse, ResponseError, delete, get, head, patch, post, web};
-use common::models::ScheduleSlot;
-use mongodb::bson::DateTime as BsonDateTime;
+use common::models::CreateScheduleSlot;
 use tracing::{debug, error, info, instrument};
 use validator::Validate;
 
@@ -169,22 +168,23 @@ pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
 #[instrument(name = "create_schedule_request", skip(payload))]
 pub(crate) async fn create_doctor_schedule(
     path: web::Path<String>,
-    payload: web::Json<Vec<ScheduleSlot>>,
+    payload: web::Json<Vec<CreateScheduleSlot>>,
 ) -> HttpResponse {
     let doctor_id = path.into_inner();
+    let slots = payload.into_inner();
 
-    let slots: Vec<ScheduleSlot> = payload
-        .into_inner()
-        .into_iter()
-        .map(|s| ScheduleSlot {
-            slot_id: s.slot_id,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            is_available: Some(true), // automatically setting availability = true
-            created_at: Some(BsonDateTime::now()),
-            updated_at: None,
-        })
-        .collect();
+    // let slots: Vec<ScheduleSlot> = payload
+    //     .into_inner()
+    //     .into_iter()
+    //     .map(|s| ScheduleSlot {
+    //         slot_id: s.slot_id,
+    //         start_time: s.start_time,
+    //         end_time: s.end_time,
+    //         is_available: true, // automatically setting availability = true
+    //         created_at: BsonDateTime::now(),
+    //         updated_at: None,
+    //     })
+    //     .collect();
 
     match repository::create_doctor_schedule(doctor_id, slots).await {
         Ok(slots) => {

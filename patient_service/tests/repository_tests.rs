@@ -11,25 +11,42 @@ mod patient_repository_test {
     };
     use patient_service::repository;
 
-    async fn setup_integration_test() {
+    // Serializes tests: the global DB client is bound to the runtime of the test
+    // that initialized it, so concurrent tests would invalidate each other's client.
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    // All tests share a single runtime, so the cached MongoDB client's background
+    // tasks stay alive for the whole test suite.
+    fn run_async<F: Future<Output = ()>>(fut: F) {
+        static RT: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+        RT.get_or_init(|| tokio::runtime::Runtime::new().expect("failed to create runtime"))
+            .block_on(fut);
+    }
+
+    async fn setup_integration_test() -> std::sync::MutexGuard<'static, ()> {
+        let guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         setup_test_env().await;
         common::db::reset_db_for_test();
         common::db::init_db().await;
         cleanup_db().await;
+        guard
     }
 
     async fn cleanup_db() {
-        let collection =
-            common::db::get_collection::<mongodb::bson::Document>("patients_collection");
+        let collection = common::db::get_collection::<mongodb::bson::Document>("patients_table");
         let _ = collection.delete_many(doc! {}).await;
         let deleted_collection =
             common::db::get_collection::<mongodb::bson::Document>("patient_deleted");
         let _ = deleted_collection.delete_many(doc! {}).await;
     }
 
-    #[tokio::test]
-    async fn test_create_and_get_patient() {
-        setup_integration_test().await;
+    #[test]
+    fn test_create_and_get_patient() {
+        run_async(test_create_and_get_patient_impl());
+    }
+
+    async fn test_create_and_get_patient_impl() {
+        let _guard = setup_integration_test().await;
 
         let contact = ContactInfo {
             phone: "1234567890".to_string(),
@@ -47,7 +64,7 @@ mod patient_repository_test {
         };
 
         let insert_result = repository::create_patient(payload).await.unwrap();
-        let patient_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let patient_id = insert_result.inserted_id.as_str().unwrap().to_string();
 
         let patient = repository::get_single_patient(patient_id)
             .await
@@ -57,9 +74,13 @@ mod patient_repository_test {
         assert_eq!(patient.gender, Gender::Male);
     }
 
-    #[tokio::test]
-    async fn test_list_patients() {
-        setup_integration_test().await;
+    #[test]
+    fn test_list_patients() {
+        run_async(test_list_patients_impl());
+    }
+
+    async fn test_list_patients_impl() {
+        let _guard = setup_integration_test().await;
 
         let contact = ContactInfo {
             phone: "1234567890".to_string(),
@@ -88,9 +109,13 @@ mod patient_repository_test {
         assert!(patients.iter().any(|p| p.name == "Patient List"));
     }
 
-    #[tokio::test]
-    async fn test_delete_patient() {
-        setup_integration_test().await;
+    #[test]
+    fn test_delete_patient() {
+        run_async(test_delete_patient_impl());
+    }
+
+    async fn test_delete_patient_impl() {
+        let _guard = setup_integration_test().await;
 
         let contact = ContactInfo {
             phone: "1234567890".to_string(),
@@ -108,7 +133,7 @@ mod patient_repository_test {
         };
 
         let insert_result = repository::create_patient(payload).await.unwrap();
-        let patient_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let patient_id = insert_result.inserted_id.as_str().unwrap().to_string();
 
         let deleted = repository::delete_patient(patient_id.clone())
             .await
@@ -119,9 +144,13 @@ mod patient_repository_test {
         assert!(patient.is_none());
     }
 
-    #[tokio::test]
-    async fn test_patient_exists() {
-        setup_integration_test().await;
+    #[test]
+    fn test_patient_exists() {
+        run_async(test_patient_exists_impl());
+    }
+
+    async fn test_patient_exists_impl() {
+        let _guard = setup_integration_test().await;
 
         let contact = ContactInfo {
             phone: "1234567890".to_string(),
@@ -139,15 +168,19 @@ mod patient_repository_test {
         };
 
         let insert_result = repository::create_patient(payload).await.unwrap();
-        let patient_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let patient_id = insert_result.inserted_id.as_str().unwrap().to_string();
 
         assert!(repository::patient_exists(patient_id).await);
         assert!(!repository::patient_exists(mongodb::bson::oid::ObjectId::new().to_hex()).await);
     }
 
-    #[tokio::test]
-    async fn test_update_insurance() {
-        setup_integration_test().await;
+    #[test]
+    fn test_update_insurance() {
+        run_async(test_update_insurance_impl());
+    }
+
+    async fn test_update_insurance_impl() {
+        let _guard = setup_integration_test().await;
 
         let contact = ContactInfo {
             phone: "1234567890".to_string(),
@@ -165,7 +198,7 @@ mod patient_repository_test {
         };
 
         let insert_result = repository::create_patient(payload).await.unwrap();
-        let patient_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let patient_id = insert_result.inserted_id.as_str().unwrap().to_string();
 
         let insurance_update = UpdateInsuranceDto {
             provider_name: Some("HealthPlus".to_string()),
@@ -188,9 +221,13 @@ mod patient_repository_test {
         assert_eq!(insurance.policy_number, "HP12345");
     }
 
-    #[tokio::test]
-    async fn test_update_medical_alerts() {
-        setup_integration_test().await;
+    #[test]
+    fn test_update_medical_alerts() {
+        run_async(test_update_medical_alerts_impl());
+    }
+
+    async fn test_update_medical_alerts_impl() {
+        let _guard = setup_integration_test().await;
 
         let contact = ContactInfo {
             phone: "1234567890".to_string(),
@@ -208,7 +245,7 @@ mod patient_repository_test {
         };
 
         let insert_result = repository::create_patient(payload).await.unwrap();
-        let patient_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let patient_id = insert_result.inserted_id.as_str().unwrap().to_string();
 
         let alerts_update = UpdateMedicalAlertsDto {
             blood_type: Some("A+".to_string()),
@@ -231,9 +268,13 @@ mod patient_repository_test {
         assert!(alerts.allergies.contains(&"Peanuts".to_string()));
     }
 
-    #[tokio::test]
-    async fn test_update_contact_info() {
-        setup_integration_test().await;
+    #[test]
+    fn test_update_contact_info() {
+        run_async(test_update_contact_info_impl());
+    }
+
+    async fn test_update_contact_info_impl() {
+        let _guard = setup_integration_test().await;
 
         let contact = ContactInfo {
             phone: "1234567890".to_string(),
@@ -251,7 +292,7 @@ mod patient_repository_test {
         };
 
         let insert_result = repository::create_patient(payload).await.unwrap();
-        let patient_id = insert_result.inserted_id.as_object_id().unwrap().to_hex();
+        let patient_id = insert_result.inserted_id.as_str().unwrap().to_string();
 
         let contact_update = UpdateContactInfoDto {
             phone: Some("0000000000".to_string()),

@@ -33,6 +33,8 @@ pub enum DoctorServiceError {
     Internal(String),
     #[error("Doctor already exists in schedule database")]
     DoctorAlreadyExistInScheduleDatabase,
+    #[error("Unable to retrieve Doctor Schedule")]
+    UnableToRetrieveDoctorSchedule,
 }
 
 impl ResponseError for DoctorServiceError {
@@ -41,7 +43,7 @@ impl ResponseError for DoctorServiceError {
             Self::Validation(_) | Self::ValidationError(_) | Self::InvalidDoctorId => {
                 StatusCode::BAD_REQUEST
             }
-            Self::DoctorNotFound => StatusCode::NOT_FOUND,
+            Self::DoctorNotFound | Self::UnableToRetrieveDoctorSchedule => StatusCode::NOT_FOUND,
             Self::DoctorInactive(_) => StatusCode::FORBIDDEN,
             Self::Database(ref e) => {
                 error!("Database error: {:?}", e);

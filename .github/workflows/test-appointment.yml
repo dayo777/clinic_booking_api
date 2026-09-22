@@ -1,0 +1,33 @@
+name: appointment-service-test
+
+on:
+  push:
+    branches: [dev, feature/*]
+    paths:
+      - 'appointment_service/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'common/**'
+      - '.github/workflows/test-appointment.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'appointment_service/**'
+      - 'common/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - '.github/workflows/test-appointment.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  noop:
+    # place-holder for job
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: No-op
+        run: echo "No-op job (workflow kept valid but does nothing)"

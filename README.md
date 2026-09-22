@@ -1,9 +1,34 @@
 # Clinic Booking API (Test Project)
+A Rust-based microservice for managing clinic bookings, backed by MongoDB for data storage and Jaeger for distributed tracing.
 
-Note: `settings_dev.toml` is not pushed to VCS, and is required to run this app. I used K8s secret resource to create the file. 
-Also, MongoDB Atlas endpoint should allow your current IP address to access the database and Jaeger endpoint should be accessible from your local network.
+---
 
-### How to Pull the Image
+## 🚀 Quick Start
+
+Follow these steps to get the API running on your local machine.
+
+### Prerequisites
+
+Before starting, ensure you have the following installed and running:
+* **Rust** (Edition 2021 or later)
+* **MongoDB Atlas** account (or a local MongoDB instance) with a database named `clinic_booking_api`.
+* **Jaeger** instance running and accessible from your network for tracing.
+
+> ⚠️ **Important Network Access Notes:**
+> * **MongoDB Atlas:** Ensure your current IP address is added to the IP Access List in your Atlas cluster dashboard.
+> * **Jaeger Endpoint:** Confirm your host machine can reach the Jaeger ingestion endpoint.
+
+---
+
+### Setup & Installation
+
+- git clone https://github.com/dayo777/clinic_booking_api.git
+- cd clinic_booking_api
+- rename `example_settings_dev.toml` to `settings_dev.toml`, and input the MONGODB URI, DB name, and Jaeger ingestion endpoint
+
+Note: `settings_dev.toml` is not pushed to VCS, and is required to run this app. 
+
+### How to Pull the Image from Docker hub
 
 To pull this test image from Docker Hub, use:
 
@@ -11,12 +36,16 @@ To pull this test image from Docker Hub, use:
 docker pull dayo777/clinic-booking-api:main
 ```
 
-### How to Run the Image
+### How to Run the pulled Image locally
 
-Run the container by mapping port 8080. This service is built with Rust and Actix-web.
+Ensure `settings_dev.toml` exist in the same directory you are running this command from
 
 ```
-docker run -d -p 8080:8080 dayo777/clinic-booking-api:main
+docker run -d \
+  --name clinic_api \
+  -p 8080:8080 \
+  -v $(pwd)/settings_dev.toml:/settings_dev.toml \
+  dayo777/clinic-booking-api:main
 ```
 
 
@@ -25,7 +54,7 @@ docker run -d -p 8080:8080 dayo777/clinic-booking-api:main
 ### Quick Test Command
 
 ```
-curl -X GET -H "x-api-version: 1" http://localhost:8080/api/
+curl -X GET -H "x-api-version: 1" localhost:8080/api/
 ```
 
 ### Available Endpoints

@@ -2,4 +2,5 @@
 
 pub mod db;
 pub mod logging;
+pub mod models;
 pub mod utils;

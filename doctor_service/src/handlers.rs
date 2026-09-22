@@ -2,6 +2,7 @@
 
 use crate::{models, repository};
 use actix_web::{HttpResponse, ResponseError, delete, get, head, patch, post, web};
+use common::models::CreateScheduleSlot;
 use tracing::{debug, error, info, instrument};
 use validator::Validate;
 
@@ -41,7 +42,7 @@ pub(crate) async fn create_doctor(payload: web::Json<models::CreateDoctorDto>) -
             "Error saving Doctor details."
         };
 
-        return HttpResponse::BadRequest().body(error_message);
+        return HttpResponse::BadRequest().body(error_message.to_string());
     }
 
     let dto = payload.into_inner();
@@ -159,26 +160,31 @@ pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
     }
 }
 
-/// -------------
-/// All handlers for handling Doctor schedules are defined below this line
-/// Design is in such that a Doctor can only have one ScheduleID
-#[post("/{id}/create-schedule")]
+// -------------
+// All handlers for handling Doctor schedules are defined below this line
+// Design is structured such that a Doctor can only have one ScheduleID
+// Doctors should be able to create their Schedules, Patient can view for booking
+#[post("/{id}/create-doctor-schedule")]
 #[instrument(name = "create_schedule_request", skip(payload))]
 pub(crate) async fn create_doctor_schedule(
     path: web::Path<String>,
-    payload: web::Json<Vec<models::ScheduleSlot>>,
+    payload: web::Json<Vec<CreateScheduleSlot>>,
 ) -> HttpResponse {
     let doctor_id = path.into_inner();
+    let slots = payload.into_inner();
 
-    let slots: Vec<models::ScheduleSlot> = payload
-        .into_inner()
-        .into_iter()
-        .map(|s| models::ScheduleSlot {
-            start_time: s.start_time,
-            end_time: s.end_time,
-            is_available: Some(true), // automatically setting availability = true
-        })
-        .collect();
+    // let slots: Vec<ScheduleSlot> = payload
+    //     .into_inner()
+    //     .into_iter()
+    //     .map(|s| ScheduleSlot {
+    //         slot_id: s.slot_id,
+    //         start_time: s.start_time,
+    //         end_time: s.end_time,
+    //         is_available: true, // automatically setting availability = true
+    //         created_at: BsonDateTime::now(),
+    //         updated_at: None,
+    //     })
+    //     .collect();
 
     match repository::create_doctor_schedule(doctor_id, slots).await {
         Ok(slots) => {

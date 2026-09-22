@@ -1,1 +1,1 @@
-// Integration tests against real/test DB connections.
+// repository test for all Appointment endpoints goes here

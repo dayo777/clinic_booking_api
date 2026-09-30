@@ -26,6 +26,7 @@ Required header for the current version: `x-api-version: 1`
 - `POST /api/doctor` - Create a new doctor ✅ [Try endpoint](#create-doctor)
 - `GET /api/doctor/{id}` - Get doctor details ✅ [Try endpoint](#retrieve-a-single-doctor)
 - `GET /api/doctor` - List all doctors (supports `page` and `limit` query params) ✅ [Try endpoint](#list-doctors-with-pagination)
+- `GET /api/doctor/inactive` - List all inactive doctors (supports `page` and `limit` query params) ✅ [Try endpoint](#list-inactive-doctors-with-pagination)
 - `PATCH /api/doctor/{id}/enable` - Re-enable an inactive doctor ✅ [Try endpoint](#enable-doctor)
 - `DELETE /api/doctor/{id}` - Delete/Archive doctor ✅ [Try endpoint](#delete-doctor)
 - `POST /api/doctor/{id}/create-schedule` - Create a doctor schedule ✅ [Try endpoint](#create-doctor-schedule)
@@ -172,6 +173,13 @@ curl -X GET http://localhost:8080/api/doctor/{id} \
 To list doctors with pagination, use the `page` and `limit` query parameters.
 ```bash
 curl -X GET "http://localhost:8080/api/doctor?page=1&limit=10" \
+     -H "x-api-version: 1"
+```
+
+#### List Inactive Doctors with Pagination
+To list non-active doctors with pagination, use the `page` and `limit` query parameters.
+```bash
+curl -X GET "http://localhost:8080/api/doctor/inactive?page=1&limit=10" \
      -H "x-api-version: 1"
 ```
 

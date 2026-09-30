@@ -1,4 +1,3 @@
-// TODO: Create_appointment working but the Doctor_schedule availability is not updated to FALSE
 // Database operations: insert, find_by_id, find_by_email, etc.
 
 use crate::error::AppointmentScheduleError;
@@ -275,6 +274,7 @@ pub async fn get_all_doctor_appointments(
     Ok(doctor_appointments)
 }
 
+// TODO: should only be able to confirm appointment if appointment is in `Scheduled` status
 // change AppointmentStatus to `confirmed` & update status-history
 #[instrument(name = "db_confirm_appointment", fields(appointment_id = ?appointment_id))]
 pub async fn confirm_appointment(
@@ -323,6 +323,7 @@ pub async fn confirm_appointment(
     Ok(())
 }
 
+// TODO: should only be able to cancel appointment if appointment is in `Scheduled` OR `Confirmed` status
 // change AppointmentStatus to `canceled` & update status-history
 #[instrument(name = "db_cancel_appointment", fields(appointment_id = ?appointment_id))]
 pub async fn cancel_appointment(
@@ -371,14 +372,108 @@ pub async fn cancel_appointment(
     Ok(())
 }
 
+// TODO: should only be able to complete appointment if appointment is in `Confirmed` status
+// change AppointmentStatus to `Completed` & update status-history
+#[instrument(name = "db_complete_appointment", fields(appointment_id = ?appointment_id))]
+pub async fn complete_appointment(
+    appointment_id: String,
+    reason: String,
+) -> Result<(), AppointmentScheduleError> {
+    let filter = doc! {"_id": &appointment_id};
+
+    let reason = if reason.is_empty() {
+        String::from("Appointment Completed successfully.")
+    } else {
+        reason
+    };
+
+    let appointment_status_update = AppointmentStatusHistoryDto {
+        status: AppointmentStatus::Completed,
+        changed_at: mongodb::bson::DateTime::now(),
+        reason,
+    };
+
+    let status_bson = mongodb::bson::to_bson(&AppointmentStatus::Completed).map_err(|_| {
+        AppointmentScheduleError::Internal(String::from(
+            "Unable to convert Appointment status to BSON",
+        ))
+    })?;
+    let status_history_bson = mongodb::bson::to_bson(&appointment_status_update).map_err(|_| {
+        AppointmentScheduleError::Internal(String::from(
+            "Unable to convert Appointment history status to BSON",
+        ))
+    })?;
+
+    let modified_content = doc! {
+        "$set": {
+            "status": status_bson,
+            "updated_at": mongodb::bson::DateTime::now(),
+        },
+        "$push": {
+            "status_history": status_history_bson,
+        }
+    };
+
+    let collection = get_collection::<AppointmentDto>(APPOINTMENT_COLLECTION);
+    info!("Updating appointment status to completed");
+    collection.update_one(filter, modified_content).await?;
+
+    Ok(())
+}
+
+// TODO: should only be able to complete appointment if appointment is in `Confirmed` status
+// change AppointmentStatus to `NoShow` & update status-history
+#[instrument(name = "db_no_show_appointment", fields(appointment_id = ?appointment_id))]
+pub async fn no_show_appointment(
+    appointment_id: String,
+    reason: String,
+) -> Result<(), AppointmentScheduleError> {
+    let filter = doc! {"_id": &appointment_id};
+
+    let reason = if reason.is_empty() {
+        String::from("Patient did not show up for this appointment session.")
+    } else {
+        reason
+    };
+
+    let appointment_status_update = AppointmentStatusHistoryDto {
+        status: AppointmentStatus::NoShow,
+        changed_at: mongodb::bson::DateTime::now(),
+        reason,
+    };
+
+    let status_bson = mongodb::bson::to_bson(&AppointmentStatus::NoShow).map_err(|_| {
+        AppointmentScheduleError::Internal(String::from(
+            "Unable to convert Appointment status to BSON",
+        ))
+    })?;
+    let status_history_bson = mongodb::bson::to_bson(&appointment_status_update).map_err(|_| {
+        AppointmentScheduleError::Internal(String::from(
+            "Unable to convert Appointment history status to BSON",
+        ))
+    })?;
+
+    let modified_content = doc! {
+        "$set": {
+            "status": status_bson,
+            "updated_at": mongodb::bson::DateTime::now(),
+        },
+        "$push": {
+            "status_history": status_history_bson,
+        }
+    };
+
+    let collection = get_collection::<AppointmentDto>(APPOINTMENT_COLLECTION);
+    info!("Updating appointment status to NoShow");
+    collection.update_one(filter, modified_content).await?;
+
+    Ok(())
+}
+
 // TODO: recommendations to note
 // 1. Make status a Rust enum serialized to a string (#[serde(rename_all = "snake_case")]) so it's readable in the DB and index-friendly.
 // 2. Add created_at / updated_at and consider a small embedded status_history array if you need an audit trail of transitions.
 // 3. Enforce valid transitions in the service layer (e.g., can't go Completed → Scheduled), and use conditional updates (updateOne with a filter on the expected current status) to avoid race conditions.
 
 // TODO: Other handlers to add
-// 4. Cancel an appointment #[patch("/{id}/cancel")]
-// 5. Confirm an appointment #[patch("/{id}/confirm")]
-// 6. Complete an appointment #[patch("/{id}/complete")]
-// 7. Mark no show #[patch("/{id}/no-show")]
 // 8. Get an appointment status history #[get("/{id}/history")]

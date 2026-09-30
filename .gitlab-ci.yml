@@ -1,28 +1,26 @@
-# TODO: confirm this later
-# GitLab CI/CD replicating the GitHub Actions workflows in .github/workflows/
-# - audit.yml        -> audit (manual)
-# - lint.yml         -> fmt, clippy
-# - test-doctor.yml  -> test-doctor
-# - test-patient.yml -> test-patient
-# - build.yml        -> build (Docker build & push on main + version tags)
-
 stages:
   - lint
   - test
+  - security # this is Audit in GH
   - build
-  - package
   - deploy
 
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
 
-# Cancel in-progress pipelines on the same ref when new commits are pushed
-# (equivalent of GitHub Actions `concurrency` with cancel-in-progress: true)
+# global defaults
 default:
   interruptible: true
+  image: rust:1.98.1-slim
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
 
+# global variables
 variables:
+  APP_NAME: "clinic-booking-api"
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   CARGO_TERM_COLOR: "always"
   DOCKER_IMAGE_NAME: "dayo777/clinic-booking-api"
@@ -83,6 +81,7 @@ clippy:
     DOCKER_TLS_CERTDIR: ""
     TESTCONTAINERS_HOST_OVERRIDE: "docker"
   cache: *cargo-cache
+  allow_failure: false
   before_script:
     # Install docker CLI to pre-pull the test images (equivalent of "Pre-pull test images")
     - apt-get update -qq && apt-get install -y -qq docker.io > /dev/null
@@ -129,6 +128,20 @@ test-patient:
   script:
     - cargo test -p patient_service -- --test-threads=1
 
+audit:
+  stage: security
+  image: rust:latest
+  # workflow_dispatch equivalent: run manually from the GitLab UI
+  rules:
+    - when: manual
+      allow_failure: true
+  cache:
+    <<: *cargo-cache
+    policy: pull
+  script:
+    - cargo install cargo-audit --locked
+    - cargo audit
+
 # ---------------------------------------------------------------------------
 # Build & Push Docker image (build.yml)
 # Runs on pushes to main and on v*.*.* tags.
@@ -136,6 +149,7 @@ test-patient:
 # ---------------------------------------------------------------------------
 build:
   stage: build
+  needs: [test-patient, audit, test-doctor]
   image: docker:27
   services:
     - docker:27-dind
@@ -167,19 +181,4 @@ build:
         $TAGS .
     - docker push --all-tags "$DOCKER_IMAGE_NAME"
 
-# ---------------------------------------------------------------------------
-# Audit dependencies (audit.yml) — manual trigger, configured via audit.toml
-# ---------------------------------------------------------------------------
-audit:
-  stage: audit
-  image: rust:latest
-  # workflow_dispatch equivalent: run manually from the GitLab UI
-  rules:
-    - when: manual
-      allow_failure: true
-  cache:
-    <<: *cargo-cache
-    policy: pull
-  script:
-    - cargo install cargo-audit --locked
-    - cargo audit
+

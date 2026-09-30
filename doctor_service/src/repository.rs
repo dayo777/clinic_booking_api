@@ -142,6 +142,51 @@ pub async fn list_doctor(
     Ok(doctors)
 }
 
+#[instrument(name = "db_list_inactive_doctors", skip(pagination))]
+pub async fn list_inactive_doctor(
+    pagination: PaginationQuery,
+) -> Result<Vec<DoctorResponseDto>, DoctorServiceError> {
+    let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
+    const DEFAULT_LIMIT: u64 = 15;
+    const MAX_LIMIT: u64 = 100;
+
+    let limit = pagination
+        .limit
+        .unwrap_or(DEFAULT_LIMIT)
+        .clamp(1, MAX_LIMIT);
+    let page = pagination.page.unwrap_or(1).max(1);
+    let skip = (page - 1) * limit;
+
+    let find_options = FindOptions::builder()
+        .limit(limit as i64)
+        .skip(skip)
+        .sort(doc! { "_id": 1 })
+        .build();
+
+    info!(
+        limit = limit,
+        page = page,
+        skip = skip,
+        "Executing MongoDB Find for inactive doctor list"
+    );
+
+    let filter = doc! { "is_active": false};
+    let mut cursor = collection.find(filter).with_options(find_options).await?;
+    let mut doctors = Vec::new();
+
+    while let Some(d) = cursor.try_next().await? {
+        doctors.push(DoctorResponseDto {
+            doctor_id: d.doctor_id,
+            name: d.name,
+            specialties: d.specialties,
+            license_num: d.license_num,
+            is_active: d.is_active,
+        });
+    }
+
+    Ok(doctors)
+}
+
 #[instrument(name = "db_delete_doctor", fields(doctor_id = %doctor_id))]
 pub async fn delete_doctor(doctor_id: String) -> Result<bool, DoctorServiceError> {
     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);

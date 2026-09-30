@@ -103,6 +103,26 @@ pub(crate) async fn list_doctors(query: web::Query<models::PaginationQuery>) -> 
     }
 }
 
+// gets the in-active doctors so that user is able to enable Doctor from the UI
+#[get("/inactive")]
+#[instrument(name = "get_inactive_doctor_list_request", skip(query))]
+pub(crate) async fn get_inactive_doctor_list(
+    query: web::Query<models::PaginationQuery>,
+) -> HttpResponse {
+    info!("Processing inactive doctor list request");
+
+    match repository::list_inactive_doctor(query.into_inner()).await {
+        Ok(doctors) => {
+            info!("Successfully retrieved inactive doctor list");
+            HttpResponse::Ok().json(doctors)
+        }
+        Err(e) => {
+            debug!(cause = %e, "Failed to retrieve inactive doctor list");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
 // #[put("{id}")]
 // async fn update_doctor(path: web::Path<u32>) -> HttpResponse {
 //     let span = span!("update_doctor", service.name = "doctor_service");

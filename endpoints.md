@@ -10,7 +10,40 @@ This document lists the currently registered endpoints in the Clinic Booking API
 
 All endpoints require the header `x-api-version: 1`.
 
-## Service Endpoints
+## Table of Contents
+
+- **[Patient Service](#patient-service-examples)**
+  - [Check Patient Existence](#check-patient-existence)
+  - [Create Patient](#create-patient)
+  - [Retrieve a Patient](#retrieve-a-patient)
+  - [List Patients with Pagination](#list-patients-with-pagination)
+  - [Update Patient Insurance](#update-patient-insurance)
+  - [Update Patient Medical Alerts](#update-patient-medical-alerts)
+  - [Update Patient Contact Information](#update-patient-contact-information)
+  - [Archive Patient](#archive-patient)
+
+- **[Doctor Service](#doctor-service-examples)**
+  - [Check Doctor Existence](#check-doctor-existence)
+  - [Create Doctor](#create-doctor)
+  - [Retrieve a Doctor](#retrieve-a-doctor)
+  - [List Doctors with Pagination](#list-doctors-with-pagination)
+  - [List Inactive Doctors](#list-inactive-doctors)
+  - [Enable Doctor](#enable-doctor)
+  - [Archive Doctor](#archive-doctor)
+  - [Create Doctor Schedule](#create-doctor-schedule)
+  - [Retrieve Active Doctor Schedule](#retrieve-active-doctor-schedule)
+
+- **[Appointment Service](#appointment-service-examples)**
+  - [Create an Appointment](#create-an-appointment)
+  - [Retrieve an Appointment](#retrieve-an-appointment)
+  - [List Appointments for a Patient](#list-appointments-for-a-patient)
+  - [List Appointments for a Doctor](#list-appointments-for-a-doctor)
+  - [Confirm an Appointment](#confirm-an-appointment)
+  - [Cancel an Appointment](#cancel-an-appointment)
+  - [Complete an Appointment](#complete-an-appointment)
+  - [Mark an Appointment as No-Show](#mark-an-appointment-as-no-show)
+
+## Service Endpoints Summary
 
 - `GET /api` - API health/welcome message
 
@@ -48,6 +81,8 @@ All endpoints require the header `x-api-version: 1`.
 - `PATCH /api/appointment/{appointment_id}/complete` - Mark an appointment as completed
 - `PATCH /api/appointment/{appointment_id}/no-show` - Mark an appointment as no-show
 
+---
+
 ## Command-Line Examples
 
 Every example below includes the required API-version header.
@@ -61,7 +96,9 @@ curl -X GET http://localhost:8080/api \
 
 ---
 
-## Patient Service
+## Patient Service Examples
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Check Patient Existence
 
@@ -71,6 +108,8 @@ Returns `204 No Content` when the patient exists and `404 Not Found` otherwise.
 curl -I http://localhost:8080/api/patient/{id} \
   -H "x-api-version: 1"
 ```
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Create Patient
 
@@ -92,6 +131,8 @@ curl -X POST http://localhost:8080/api/patient \
   }'
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### Retrieve a Patient
 
 ```bash
@@ -99,12 +140,16 @@ curl -X GET http://localhost:8080/api/patient/{id} \
   -H "x-api-version: 1"
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### List Patients with Pagination
 
 ```bash
 curl -X GET "http://localhost:8080/api/patient?page=1&limit=10" \
   -H "x-api-version: 1"
 ```
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Update Patient Insurance
 
@@ -120,6 +165,8 @@ curl -X PUT http://localhost:8080/api/patient/{id}/insurance \
   }'
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### Update Patient Medical Alerts
 
 ```bash
@@ -133,6 +180,8 @@ curl -X PUT http://localhost:8080/api/patient/{id}/medical-alerts \
     "current_medications": ["Albuterol"]
   }'
 ```
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Update Patient Contact Information
 
@@ -149,6 +198,8 @@ curl -X PUT http://localhost:8080/api/patient/{id}/contact \
   }'
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### Archive Patient
 
 ```bash
@@ -156,9 +207,13 @@ curl -X DELETE http://localhost:8080/api/patient/{id} \
   -H "x-api-version: 1"
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ---
 
-## Doctor Service
+## Doctor Service Examples
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Check Doctor Existence
 
@@ -168,6 +223,8 @@ Returns `204 No Content` when the doctor exists and `404 Not Found` otherwise.
 curl -I http://localhost:8080/api/doctor/{id} \
   -H "x-api-version: 1"
 ```
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Create Doctor
 
@@ -184,12 +241,16 @@ curl -X POST http://localhost:8080/api/doctor \
   }'
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### Retrieve a Doctor
 
 ```bash
 curl -X GET http://localhost:8080/api/doctor/{id} \
   -H "x-api-version: 1"
 ```
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### List Doctors with Pagination
 
@@ -198,12 +259,16 @@ curl -X GET "http://localhost:8080/api/doctor?page=1&limit=10" \
   -H "x-api-version: 1"
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### List Inactive Doctors
 
 ```bash
 curl -X GET "http://localhost:8080/api/doctor/inactive?page=1&limit=10" \
   -H "x-api-version: 1"
 ```
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Enable Doctor
 
@@ -212,12 +277,16 @@ curl -X PATCH http://localhost:8080/api/doctor/{id}/enable \
   -H "x-api-version: 1"
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### Archive Doctor
 
 ```bash
 curl -X DELETE http://localhost:8080/api/doctor/{id} \
   -H "x-api-version: 1"
 ```
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Create Doctor Schedule
 
@@ -239,6 +308,8 @@ curl -X POST http://localhost:8080/api/doctor/{id}/create-doctor-schedule \
   ]'
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### Retrieve Active Doctor Schedule
 
 ```bash
@@ -246,9 +317,13 @@ curl -X GET http://localhost:8080/api/doctor/{id}/active-doctor-schedule \
   -H "x-api-version: 1"
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ---
 
-## Appointment Service
+## Appointment Service Examples
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Create an Appointment
 
@@ -265,6 +340,8 @@ curl -X POST http://localhost:8080/api/appointment \
   }'
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### Retrieve an Appointment
 
 ```bash
@@ -272,12 +349,16 @@ curl -X GET http://localhost:8080/api/appointment/{id} \
   -H "x-api-version: 1"
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### List Appointments for a Patient
 
 ```bash
 curl -X GET "http://localhost:8080/api/appointment/patient/{patient_id}?page=1&limit=10" \
   -H "x-api-version: 1"
 ```
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### List Appointments for a Doctor
 
@@ -287,6 +368,8 @@ curl -X GET "http://localhost:8080/api/appointment/doctor/{doctor_id}?page=1&lim
 ```
 
 The appointment list endpoints also work without query parameters.
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Confirm an Appointment
 
@@ -299,6 +382,8 @@ curl -X PATCH http://localhost:8080/api/appointment/{appointment_id}/confirm \
   -d '{"reason": "Appointment confirmed by doctor."}'
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### Cancel an Appointment
 
 ```bash
@@ -307,6 +392,8 @@ curl -X PATCH http://localhost:8080/api/appointment/{appointment_id}/cancel \
   -H "x-api-version: 1" \
   -d '{"reason": "Doctor unavailable."}'
 ```
+
+[↑ Back to Table of Contents](#table-of-contents)
 
 ### Complete an Appointment
 
@@ -317,6 +404,8 @@ curl -X PATCH http://localhost:8080/api/appointment/{appointment_id}/complete \
   -d '{"reason": "Consultation completed."}'
 ```
 
+[↑ Back to Table of Contents](#table-of-contents)
+
 ### Mark an Appointment as No-Show
 
 ```bash
@@ -325,3 +414,5 @@ curl -X PATCH http://localhost:8080/api/appointment/{appointment_id}/no-show \
   -H "x-api-version: 1" \
   -d '{"reason": "Patient did not attend the appointment."}'
 ```
+
+[↑ Back to Table of Contents](#table-of-contents)

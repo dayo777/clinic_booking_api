@@ -15,6 +15,8 @@ pub fn appointment_config_v1(cfg: &mut web::ServiceConfig) {
             .service(handlers::get_all_doctor_appointment)
             .service(handlers::confirm_appointment)
             .service(handlers::cancel_appointment)
+            .service(handlers::no_show_appointment)
+            .service(handlers::complete_appointment)
             .default_service(
                 web::route()
                     .guard(guard::Head())

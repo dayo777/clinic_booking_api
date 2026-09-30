@@ -15,6 +15,7 @@ pub fn doctor_config_v1(cfg: &mut web::ServiceConfig) {
             .service(handlers::create_doctor)
             .service(handlers::get_doctor)
             .service(handlers::list_doctors)
+            .service(handlers::get_inactive_doctor_list)
             .service(handlers::delete_doctor)
             .service(handlers::enable_doctor)
             .service(handlers::create_doctor_schedule)

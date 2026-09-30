@@ -137,3 +137,49 @@ pub(crate) async fn cancel_appointment(
         }
     }
 }
+
+// endpoint used by the Doctor to complete an appointment
+// changes AppointmentStatus to Completed
+#[patch("/{appointment_id}/complete")]
+#[instrument(name = "complete_doctor_appointment_request", fields(id = ?app_id))]
+pub(crate) async fn complete_appointment(
+    payload: web::Json<models::UpdateAppointmentStatusDto>,
+    app_id: web::Path<String>,
+) -> HttpResponse {
+    info!("complete appointment");
+    let appointment_id = app_id.into_inner();
+    let payload = payload.into_inner();
+    match repository::confirm_appointment(appointment_id, payload.reason.unwrap()).await {
+        Ok(_) => {
+            info!("Successfully completed appointment");
+            HttpResponse::Ok().finish()
+        }
+        Err(e) => {
+            debug!(cause = %e, "Error completing appointment");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+// endpoint used by the Doctor to indicate a NoShow appointment
+// changes AppointmentStatus `NoShow`
+#[patch("/{appointment_id}/no-show")]
+#[instrument(name = "no_show_doctor_appointment_request", fields(id = ?app_id))]
+pub(crate) async fn no_show_appointment(
+    payload: web::Json<models::UpdateAppointmentStatusDto>,
+    app_id: web::Path<String>,
+) -> HttpResponse {
+    info!("NoShow appointment");
+    let appointment_id = app_id.into_inner();
+    let payload = payload.into_inner();
+    match repository::no_show_appointment(appointment_id, payload.reason.unwrap()).await {
+        Ok(_) => {
+            info!("Successfully indicated NoShow appointment");
+            HttpResponse::Ok().finish()
+        }
+        Err(e) => {
+            debug!(cause = %e, "Error for NoShow appointment");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}

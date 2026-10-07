@@ -4,3 +4,6 @@ database = 'clinic_booking_api or the name of your database here'
 
 [tracing]
 OTEL_EXPORTER_OTLP_ENDPOINT = 'http://localhost:4317'
+
+[server]
+ALLOWED_ORIGIN = "http://localhost:3000"

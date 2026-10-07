@@ -3,8 +3,6 @@ use actix_cors::Cors;
 // use config::Config;
 // use std::env;
 
-
-
 pub(crate) fn frontend_allowed_cors_origins() -> Cors {
     // TODO: work on the CORS later
     // let config = Config::builder()
@@ -27,11 +25,9 @@ pub(crate) fn frontend_allowed_cors_origins() -> Cors {
     //     .expose_headers(vec!["Content-Length"])
     //     .max_age(3600);
 
-    let cors = Cors::default()
-        .allow_any_origin()     // ← allow all origins
-        .allow_any_method()     // ← allow GET, POST, PATCH, DELETE etc
-        .allow_any_header()     // ← allow any header
-        .max_age(3600);
-
-    cors
+    Cors::default()
+        .allow_any_origin()
+        .allow_any_method()
+        .allow_any_header()
+        .max_age(3600)
 }

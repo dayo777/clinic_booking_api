@@ -650,6 +650,7 @@ dependencies = [
  "actix-web",
  "appointment_service",
  "common",
+ "config",
  "doctor_service",
  "mongodb",
  "patient_service",

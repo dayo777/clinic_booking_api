@@ -1,5 +1,7 @@
 //! Always ensure to start Jaegar for logging & allow your IP on MongoDB Atlas
-use actix_cors::Cors;
+
+mod cors;
+
 use actix_web::guard::{Guard, GuardContext};
 use actix_web::middleware::{NormalizePath, TrailingSlash};
 use actix_web::{App, HttpServer, Responder, web};
@@ -21,19 +23,9 @@ async fn main() -> std::io::Result<()> {
     let db_data = web::Data::new(database);
 
     HttpServer::new(move || {
-        // adding CORS support to enable front-end code sync with backend
-        let cors = Cors::default()
-            .allowed_origin("http://localhost:3000")
-            // Add other trusted frontend origins here:
-            // .allowed_origin("https://your-frontend.example.com")
-            .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
-            .allowed_headers(vec!["Content-Type", "Authorization", "x-api-version"])
-            .expose_headers(vec!["Content-Length"])
-            .max_age(3600);
-
         App::new()
             .app_data(db_data.clone())
-            .wrap(cors)
+            .wrap(cors::frontend_allowed_cors_origins())
             .wrap(NormalizePath::new(TrailingSlash::Trim))
             .wrap(TracingLogger::default())
             .service(

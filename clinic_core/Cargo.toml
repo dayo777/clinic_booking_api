@@ -8,6 +8,7 @@ actix-web = { workspace = true}
 tracing-actix-web = { workspace = true }
 tracing = { workspace = true }
 actix-cors = { workspace = true }
+config = { workspace = true }
 mongodb = { workspace = true }
 # import internally libraries below, and Rust crates above
 appointment_service = { path = "../appointment_service"}

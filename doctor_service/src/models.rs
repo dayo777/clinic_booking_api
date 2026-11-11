@@ -4,7 +4,7 @@ use common::utils::validate_specialties;
 use common::utils::{
     deserialize_bson_datetime_or_string, deserialize_option_bson_datetime_or_string,
 };
-use mongodb::bson::{DateTime as BsonDateTime, oid::ObjectId};
+use mongodb::bson::DateTime as BsonDateTime;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -57,23 +57,11 @@ pub struct PaginationQuery {
     pub limit: Option<u64>,
 }
 
-/// All definition for the Doctor Scheduling is defined below this line
-/// Trying to keep the Backend structure simple, just using Date & Time
-/// The front-end should easily infer the DayOfWeek and other details from the Date&Time
-
-// Have a separate structure to store the Doctor schedule to avoid hitting the main DoctorDto
-// separate collection for storing Doctor schedules
-#[derive(Serialize, Deserialize, Debug)]
+// All definition for the Doctor Scheduling is defined below this line
+// One bookable schedule per document, linked to its doctor.
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DoctorSchedule {
-    #[serde(rename = "_id")]
-    pub schedule_id: String,
     pub doctor_id: String,
-    pub slots: Vec<ScheduleSlot>,
-}
-
-// use this to peep if a Doctor is available for a given slot
-// appointment endpoint calls this to know if Patient can book that Slot
-pub struct ViewDoctorSchedule {
-    pub doctor_id: ObjectId,
-    pub slots: ScheduleSlot,
+    #[serde(flatten)]
+    pub slot: ScheduleSlot,
 }

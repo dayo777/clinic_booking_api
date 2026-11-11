@@ -16,7 +16,12 @@ static TEST_ENV: tokio::sync::OnceCell<TestEnv> = tokio::sync::OnceCell::const_n
 pub async fn setup_test_env() -> &'static TestEnv {
     TEST_ENV
         .get_or_init(|| async {
-            let mongodb_container = GenericImage::new("mongo", "8.3-rc-noble")
+            let mongodb_image = std::env::var("MONGODB_TEST_IMAGE")
+                .unwrap_or_else(|_| "mongo:8.3-rc-noble".to_string());
+            let (image_name, image_tag) = mongodb_image
+                .split_once(':')
+                .expect("MONGODB_TEST_IMAGE must use the image:tag format");
+            let mongodb_container = GenericImage::new(image_name, image_tag)
                 .with_exposed_port(27017.tcp())
                 .with_wait_for(WaitFor::message_on_stdout("Waiting for connections"))
                 .with_env_var("GLIBC_TUNABLES", "glibc.pthread.rseq=1")

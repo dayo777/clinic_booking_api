@@ -12,6 +12,7 @@ mod appointment_service_handler_test {
     };
     use common::models::{CreateScheduleSlot, Specialty};
     use mongodb::bson::DateTime as BsonDateTime;
+    use mongodb::bson::doc;
     use serde_json::json;
     use std::sync::{Mutex, MutexGuard, OnceLock};
 
@@ -62,13 +63,11 @@ mod appointment_service_handler_test {
         // slot must start more than 24 hours in the future
         let start_time =
             BsonDateTime::from_millis(BsonDateTime::now().timestamp_millis() + 48 * 60 * 60 * 1000);
-        let end_time = Some(BsonDateTime::from_millis(
-            start_time.timestamp_millis() + 30 * 60 * 1000,
-        ));
+        let minutes = 30;
 
         let slots = vec![CreateScheduleSlot {
             start_time,
-            end_time,
+            minutes,
         }];
 
         doctor_service::repository::create_doctor_schedule(doctor_id.clone(), slots)
@@ -168,6 +167,65 @@ mod appointment_service_handler_test {
         let resp = test::call_service(&app, req).await;
 
         assert_eq!(resp.status(), http::StatusCode::CREATED);
+    }
+
+    #[actix_web::test]
+    async fn test_booking_one_schedule_document_keeps_other_slots_available() {
+        let _test_guard = acquire_test_lock();
+        setup_integration_test().await;
+
+        let app =
+            test::init_service(App::new().configure(appointment_service::appointment_config_v1))
+                .await;
+        let (doctor_id, booked_slot_id) = seed_doctor_with_slot().await;
+        let second_slot_id = doctor_service::repository::create_doctor_schedule(
+            doctor_id.clone(),
+            vec![CreateScheduleSlot {
+                start_time: BsonDateTime::from_millis(
+                    BsonDateTime::now().timestamp_millis() + 72 * 60 * 60 * 1000,
+                ),
+                minutes: 30,
+            }],
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+
+        create_appointment_via_endpoint(
+            &app,
+            &doctor_id,
+            &booked_slot_id,
+            "pat_single_slot_booking_001",
+        )
+        .await;
+
+        let schedule_collection = common::db::get_collection::<mongodb::bson::Document>(
+            doctor_service::repository::SCHEDULE_COLLECTION,
+        );
+        let booked_slot = schedule_collection
+            .find_one(doc! { "_id": &booked_slot_id })
+            .await
+            .unwrap()
+            .unwrap();
+        let available_slot = schedule_collection
+            .find_one(doc! { "_id": &second_slot_id })
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(!booked_slot.get_bool("is_available").unwrap());
+        assert!(available_slot.get_bool("is_available").unwrap());
+        assert!(!booked_slot.contains_key("slots"));
+        assert!(!available_slot.contains_key("slots"));
+
+        let active_slots = doctor_service::repository::get_active_doctor_schedule(doctor_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(active_slots.len(), 1);
+        assert_eq!(active_slots[0].slot_id, second_slot_id);
     }
 
     #[actix_web::test]
@@ -509,7 +567,9 @@ mod appointment_service_handler_test {
         let cancel_req = test::TestRequest::patch()
             .insert_header(ContentType::json())
             .uri(&format!("/appointment/{}/cancel", appointment_id))
-            .set_json(json!({ "reason": "Patient requested cancellation" }))
+            .set_json(
+                json!({ "canceled_by": "patient", "reason": "Patient requested cancellation" }),
+            )
             .to_request();
 
         let cancel_resp = test::call_service(&app, cancel_req).await;
@@ -531,7 +591,10 @@ mod appointment_service_handler_test {
             .expect("status_history should be an array");
         assert_eq!(history.len(), 2);
         assert_eq!(history[1]["status"], "Canceled");
-        assert_eq!(history[1]["reason"], "Patient requested cancellation");
+        assert_eq!(
+            history[1]["reason"],
+            "Cancel by Patient: Patient requested cancellation"
+        );
     }
 
     #[actix_web::test]

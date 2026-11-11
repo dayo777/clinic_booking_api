@@ -11,7 +11,11 @@ mod doctor_service_handler_test {
         http::{self, header::ContentType},
         test,
     };
+    use common::models::{CreateScheduleSlot, Specialty};
+    use doctor_service::{models::CreateDoctorDto, repository};
+    use mongodb::bson::DateTime as BsonDateTime;
     use serde_json::json;
+    use std::time::{Duration, SystemTime};
     // use common::utils::generate_id;
 
     async fn setup_integration_test() {
@@ -282,11 +286,11 @@ mod doctor_service_handler_test {
         let req_data2 = json!([
             {
                 "start_time": "2028-10-01T08:00:00Z",
-                "end_time": "2028-10-01T08:30:00Z"
+                "minutes": 30
             },
             {
                 "start_time": "2028-10-01T09:00:00Z",
-                "end_time": "2028-10-01T09:30:00Z"
+                "minutes": 30
             }
         ]);
 
@@ -301,5 +305,49 @@ mod doctor_service_handler_test {
         let resp2 = test::call_service(&app, req2).await;
         eprintln!("Service-Response: {}", resp2.status());
         assert_eq!(resp2.status(), http::StatusCode::OK);
+    }
+
+    #[actix_web::test]
+    async fn test_create_doctor_schedule_overlap_returns_bad_request() {
+        setup_integration_test().await;
+
+        let app = test::init_service(App::new().configure(doctor_service::doctor_config_v1)).await;
+        let doctor_id = repository::create_doctor(CreateDoctorDto {
+            name: "Dr. Overlap".to_string(),
+            specialties: vec![Specialty::GeneralPractice],
+            license_num: "LIC-HANDLER-OVERLAP".to_string(),
+        })
+        .await
+        .unwrap();
+        repository::enable_doctor(doctor_id.clone()).await.unwrap();
+
+        let existing_start =
+            BsonDateTime::from_system_time(SystemTime::now() + Duration::from_secs(72 * 60 * 60));
+        repository::create_doctor_schedule(
+            doctor_id.clone(),
+            vec![CreateScheduleSlot {
+                start_time: existing_start,
+                minutes: 30,
+            }],
+        )
+        .await
+        .unwrap();
+
+        let overlapping_start = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(
+            existing_start.timestamp_millis() + 15 * 60_000,
+        )
+        .unwrap()
+        .to_rfc3339();
+        let request = test::TestRequest::post()
+            .insert_header(ContentType::json())
+            .insert_header(("x-api-version", "1"))
+            .uri(&format!("/doctor/{doctor_id}/create-doctor-schedule"))
+            .set_json(json!([{ "start_time": overlapping_start, "minutes": 30 }]))
+            .to_request();
+
+        let response = test::call_service(&app, request).await;
+        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+        let body: serde_json::Value = test::read_body_json(response).await;
+        assert!(body["message"].as_str().unwrap().contains("overlap"));
     }
 }

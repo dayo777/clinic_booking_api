@@ -3,6 +3,8 @@ use common::models::Specialty;
 use common::utils::validate_specialty;
 use mongodb::bson::DateTime as BsonDateTime;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+use strum::EnumString;
 use validator::Validate;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Validate)]
@@ -78,4 +80,31 @@ pub struct PaginationQuery {
 pub struct UpdateAppointmentStatusDto {
     // pub doctor_id: String,
     pub reason: Option<String>, // optional reason for cancellation or confirmation
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq, EnumString)]
+#[strum(ascii_case_insensitive)]
+pub enum CanceledBy {
+    #[strum(serialize = "patient", to_string = "patient")]
+    #[serde(alias = "patient")]
+    Patient,
+    #[strum(serialize = "doctor", to_string = "doctor")]
+    #[serde(alias = "doctor")]
+    Doctor,
+}
+
+#[derive(Deserialize, Debug, Validate)]
+pub struct CancelAppointmentDto {
+    pub canceled_by: CanceledBy,
+    pub reason: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for CanceledBy {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        CanceledBy::from_str(&s).map_err(serde::de::Error::custom)
+    }
 }

@@ -137,6 +137,13 @@ curl -X PUT http://localhost:8080/api/patient/{id}/contact \
 curl -I http://localhost:8080/api/doctor/{id} -H "x-api-version: 1"
 ```
 
+Returns `204 No Content` for an active doctor and `404 Not Found` when the doctor
+is missing or inactive. The ID may be the current string ID or the hexadecimal
+text of a legacy BSON ObjectId; if both forms exist with the same text, the
+string-ID record takes precedence. A database lookup failure returns
+`500 Internal Server Error`. The `x-api-version: 1` header is required; a missing
+or unsupported version is rejected by the existing API-version guard.
+
 ### Create Doctor
 
 ```bash
@@ -183,8 +190,33 @@ curl -X DELETE http://localhost:8080/api/doctor/{id} -H "x-api-version: 1"
 ```bash
 curl -X POST http://localhost:8080/api/doctor/{id}/create-doctor-schedule \
   -H "Content-Type: application/json" -H "x-api-version: 1" \
-  -d '[{"start_time":"2026-10-01T08:00:00Z","end_time":"2026-10-01T08:30:00Z"},{"start_time":"2026-10-01T09:00:00Z","end_time":"2026-10-01T09:30:00Z"}]'
+  -d '[{"start_time":"2028-10-01T08:00:00Z","minutes":30},{"start_time":"2028-10-01T09:00:00Z","minutes":30}]'
 ```
+
+The body is a nonempty array. Each slot must start at least 24 hours in the future,
+with `minutes` between 10 and 60. Each slot is stored in its own document with
+`_id`, `doctor_id`, `start_time`, `end_time`, `is_available`, and timestamps.
+Slots for the same doctor cannot overlap existing slots (including booked slots)
+or one another in the same request; intervals are half-open, so a slot may start
+exactly when another ends. A conflicting request returns `400 Bad Request` and
+stores none of its slots. This check is not atomic across simultaneous schedule
+creation requests.
+The response is an array of slot IDs in request order; use these as `slot_id`
+when booking appointments. Creation no longer returns a group schedule ID.
+
+`GET /api/doctor/{id}/schedule` returns all schedule documents for a doctor.
+The active endpoint below returns available future slots across all documents.
+
+For existing databases, back up `doctor_schedule_collection`, stop API writes,
+and run `mongosh "$MONGODB_URI" --file scripts/migrate_doctor_schedules.js`
+with the URI selecting the application database before starting the updated API.
+The migration preserves slot IDs, doctor IDs, availability, and timestamps, then
+creates one document per slot and a schedule lookup index. Date strings are
+normalized to BSON dates; slots missing `end_time` receive the legacy 30-minute
+duration. Invalid fields, duplicate slot IDs, or IDs already belonging to different
+documents stop the migration without deleting the legacy groups. It can be rerun
+after interruption: already-inserted slots are verified rather than overwritten,
+and each legacy group is removed only after all of its slots are present.
 
 ### Retrieve Active Doctor Schedule
 

@@ -10,11 +10,13 @@ use validator::Validate;
 pub(crate) async fn check_doctor_exists(path: web::Path<String>) -> HttpResponse {
     let id = path.into_inner();
 
-    // Call a specialized "exists" method in repository
-    if repository::doctor_exists(id).await {
-        HttpResponse::NoContent().finish()
-    } else {
-        HttpResponse::NotFound().finish() // Returns 404
+    match repository::doctor_exists(id).await {
+        Ok(true) => HttpResponse::NoContent().finish(),
+        Ok(false) => HttpResponse::NotFound().finish(),
+        Err(e) => {
+            error!(cause = %e, "Failed to check whether doctor exists");
+            HttpResponse::InternalServerError().finish()
+        }
     }
 }
 
@@ -159,14 +161,14 @@ pub(crate) async fn delete_doctor(path: web::Path<String>) -> HttpResponse {
 
 // change the value of 'is_active' to true
 #[patch("/{id}/enable")]
-#[instrument(name = "enable_doctor_request", skip(path))]
+#[instrument(name = "enable_doctor_request", fields(id = %path))]
 pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
     let id = path.into_inner();
-    info!("Processing doctor enablement handler for ID: {}", &id);
+    info!("Handling doctor enablement request");
 
     match repository::enable_doctor(id).await {
         Ok(true) => {
-            info!("Doctor enabled");
+            info!("Doctor enabled successfully");
             HttpResponse::NoContent().finish()
         }
         Ok(false) => {
@@ -180,9 +182,32 @@ pub(crate) async fn enable_doctor(path: web::Path<String>) -> HttpResponse {
     }
 }
 
+// change Doctor's is_active status to false
+#[patch("/{id}/disable-doctor")]
+#[instrument(name = "disable_doctor_request", fields(id = %path))]
+pub(crate) async fn disable_doctor(path: web::Path<String>) -> HttpResponse {
+    let id = path.into_inner();
+    info!("Handling doctor inactive request");
+
+    match repository::disable_doctor(id).await {
+        Ok(true) => {
+            info!("Doctor disabled successfully");
+            HttpResponse::NoContent().finish()
+        }
+        Ok(false) => {
+            info!("Doctor not found or is already inactive");
+            HttpResponse::NotFound().finish()
+        }
+        Err(e) => {
+            debug!(cause = %e, "Failed to disable doctor");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
 // -------------
 // All handlers for handling Doctor schedules are defined below this line
-// Design is structured such that a Doctor can only have one ScheduleID
+// Each slot is stored as its own document linked to the doctor.
 // Doctors should be able to create their Schedules, Patient can view for booking
 #[post("/{id}/create-doctor-schedule")]
 #[instrument(name = "create_schedule_request", skip(payload))]
@@ -192,19 +217,6 @@ pub(crate) async fn create_doctor_schedule(
 ) -> HttpResponse {
     let doctor_id = path.into_inner();
     let slots = payload.into_inner();
-
-    // let slots: Vec<ScheduleSlot> = payload
-    //     .into_inner()
-    //     .into_iter()
-    //     .map(|s| ScheduleSlot {
-    //         slot_id: s.slot_id,
-    //         start_time: s.start_time,
-    //         end_time: s.end_time,
-    //         is_available: true, // automatically setting availability = true
-    //         created_at: BsonDateTime::now(),
-    //         updated_at: None,
-    //     })
-    //     .collect();
 
     match repository::create_doctor_schedule(doctor_id, slots).await {
         Ok(slots) => {
@@ -219,8 +231,12 @@ pub(crate) async fn create_doctor_schedule(
 }
 
 // get both active & non-active
-pub async fn get_full_doctor_schedule() {
-    todo!("get the Doctor schedule for a Particular Doctor")
+#[get("/{id}/schedule")]
+pub async fn get_full_doctor_schedule(path: web::Path<String>) -> HttpResponse {
+    match repository::get_doctor_schedule(path.into_inner()).await {
+        Ok(schedules) => HttpResponse::Ok().json(schedules),
+        Err(e) => e.error_response(),
+    }
 }
 
 #[get("/{id}/active-doctor-schedule")]

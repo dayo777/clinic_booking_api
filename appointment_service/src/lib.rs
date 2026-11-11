@@ -17,6 +17,7 @@ pub fn appointment_config_v1(cfg: &mut web::ServiceConfig) {
             .service(handlers::cancel_appointment)
             .service(handlers::no_show_appointment)
             .service(handlers::complete_appointment)
+            .service(handlers::appointment_status_history)
             .default_service(
                 web::route()
                     .guard(guard::Head())
@@ -24,3 +25,7 @@ pub fn appointment_config_v1(cfg: &mut web::ServiceConfig) {
             ),
     );
 }
+
+// TODO: list of other possible endpoints
+// - reschedule appointment, one for doctor, one for patient;
+// -

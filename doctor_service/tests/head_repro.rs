@@ -152,10 +152,7 @@ mod setup_env;
 // }
 // new code
 use actix_web::{App, guard, http::StatusCode, test, web};
-use mongodb::{
-    Client,
-    bson::{doc},
-};
+use mongodb::{Client, bson::doc};
 use serde_json::json;
 
 #[actix_web::test]
@@ -170,7 +167,7 @@ async fn doctor_head_checks_current_and_error_cases() {
                 .configure(doctor_service::doctor_config_v1),
         ),
     )
-        .await;
+    .await;
 
     // Create a doctor
     let create = test::TestRequest::post()

@@ -25,7 +25,3 @@ pub fn appointment_config_v1(cfg: &mut web::ServiceConfig) {
             ),
     );
 }
-
-// TODO: list of other possible endpoints
-// - reschedule appointment, one for doctor, one for patient;
-// -

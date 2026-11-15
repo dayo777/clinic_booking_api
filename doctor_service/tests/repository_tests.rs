@@ -168,13 +168,13 @@ mod doctor_repository_test {
             .to_string();
 
         // Should not exist yet because it's inactive
-        assert!(!repository::doctor_exists(doctor_id.clone()).await);
+        assert!(!repository::doctor_exists(doctor_id.clone()).await.unwrap());
 
         // Enable doctor
         repository::enable_doctor(doctor_id.clone()).await.unwrap();
 
         // Now it should exist
-        assert!(repository::doctor_exists(doctor_id).await);
+        assert!(repository::doctor_exists(doctor_id).await.unwrap());
     }
 
     #[tokio::test]
@@ -198,15 +198,258 @@ mod doctor_repository_test {
         let future_time =
             BsonDateTime::from_system_time(SystemTime::now() + Duration::from_secs(48 * 3600));
 
-        let slots = vec![CreateScheduleSlot {
-            start_time: future_time,
-            end_time: None,
-        }];
+        let later_time = BsonDateTime::from_millis(future_time.timestamp_millis() + 3_600_000);
+        let slots = vec![
+            CreateScheduleSlot {
+                start_time: future_time,
+                minutes: 20,
+            },
+            CreateScheduleSlot {
+                start_time: later_time,
+                minutes: 45,
+            },
+        ];
+        let ids = repository::create_doctor_schedule(doctor_id.clone(), slots)
+            .await
+            .unwrap();
+        assert_eq!(ids.len(), 2);
+        assert_ne!(ids[0], ids[1]);
+        let schedules = repository::get_doctor_schedule(doctor_id.clone())
+            .await
+            .unwrap();
+        assert_eq!(schedules.len(), 2);
+        for (schedule, minutes) in schedules.iter().zip([20, 45]) {
+            assert_eq!(schedule.doctor_id, doctor_id);
+            assert_eq!(
+                schedule.slot.end_time.timestamp_millis()
+                    - schedule.slot.start_time.timestamp_millis(),
+                minutes * 60_000
+            );
+        }
+        let collection =
+            common::db::get_collection::<mongodb::bson::Document>(repository::SCHEDULE_COLLECTION);
+        let stored = collection
+            .find_one(doc! { "_id": &ids[0] })
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!stored.contains_key("slots"));
+        assert_eq!(stored.get_str("doctor_id").unwrap(), doctor_id);
+        let active = repository::get_active_doctor_schedule(doctor_id.clone())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(active.len(), 2);
+        let claimed =
+            repository::update_doctor_schedule_to_false(doctor_id.clone(), active[0].clone())
+                .await
+                .unwrap();
+        assert!(!claimed.is_available);
+        assert!(
+            repository::update_doctor_schedule_to_false(doctor_id.clone(), active[0].clone())
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            repository::get_active_doctor_schedule(doctor_id.clone())
+                .await
+                .unwrap()
+                .unwrap()
+                .len(),
+            1
+        );
+        // A later batch must remain visible alongside the earlier documents.
+        let next_batch_time =
+            BsonDateTime::from_millis(future_time.timestamp_millis() + 3 * 3_600_000);
+        repository::create_doctor_schedule(
+            doctor_id.clone(),
+            vec![CreateScheduleSlot {
+                start_time: next_batch_time,
+                minutes: 30,
+            }],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            repository::get_active_doctor_schedule(doctor_id.clone())
+                .await
+                .unwrap()
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(
+            repository::create_doctor_schedule(doctor_id.clone(), vec![])
+                .await
+                .is_err()
+        );
+        assert!(
+            repository::create_doctor_schedule(
+                doctor_id.clone(),
+                vec![CreateScheduleSlot {
+                    start_time: future_time,
+                    minutes: 5
+                }]
+            )
+            .await
+            .is_err()
+        );
+        assert_eq!(
+            repository::get_doctor_schedule(doctor_id)
+                .await
+                .unwrap()
+                .len(),
+            3
+        );
+    }
 
-        let result = repository::create_doctor_schedule(doctor_id, slots.clone()).await;
-        assert!(result.is_ok()); // confirm the Schedule-ID is returned
-        let schedule_id = result.unwrap();
-        assert_eq!(schedule_id.len(), 24); // confirm the Schedule-ID returned is 24 characters long
+    #[tokio::test]
+    async fn test_create_schedule_rejects_overlaps_without_partial_inserts() {
+        setup_integration_test().await;
+
+        let doctor_id = repository::create_doctor(CreateDoctorDto {
+            name: "Dr. Overlap".to_string(),
+            specialties: vec![Specialty::GeneralPractice],
+            license_num: "LIC-OVERLAP-1".to_string(),
+        })
+        .await
+        .unwrap()
+        .trim_start_matches("ObjectId(\"")
+        .trim_end_matches("\")")
+        .to_string();
+        let other_doctor_id = repository::create_doctor(CreateDoctorDto {
+            name: "Dr. Different".to_string(),
+            specialties: vec![Specialty::GeneralPractice],
+            license_num: "LIC-OVERLAP-2".to_string(),
+        })
+        .await
+        .unwrap()
+        .trim_start_matches("ObjectId(\"")
+        .trim_end_matches("\")")
+        .to_string();
+        repository::enable_doctor(doctor_id.clone()).await.unwrap();
+        repository::enable_doctor(other_doctor_id.clone())
+            .await
+            .unwrap();
+
+        let start =
+            BsonDateTime::from_system_time(SystemTime::now() + Duration::from_secs(72 * 60 * 60));
+        let start_at =
+            |minutes: i64| BsonDateTime::from_millis(start.timestamp_millis() + minutes * 60_000);
+        let existing_id = repository::create_doctor_schedule(
+            doctor_id.clone(),
+            vec![CreateScheduleSlot {
+                start_time: start,
+                minutes: 30,
+            }],
+        )
+        .await
+        .unwrap()
+        .remove(0);
+
+        let schedule_collection =
+            common::db::get_collection::<mongodb::bson::Document>(repository::SCHEDULE_COLLECTION);
+        schedule_collection
+            .update_one(
+                doc! { "_id": &existing_id },
+                doc! { "$set": { "is_available": false } },
+            )
+            .await
+            .unwrap();
+
+        for (offset, minutes) in [(0, 30), (15, 30), (5, 10)] {
+            let result = repository::create_doctor_schedule(
+                doctor_id.clone(),
+                vec![CreateScheduleSlot {
+                    start_time: start_at(offset),
+                    minutes,
+                }],
+            )
+            .await;
+            assert!(
+                result.is_err(),
+                "overlap at {offset} minutes should be rejected"
+            );
+        }
+
+        let other_doctor_ids = repository::create_doctor_schedule(
+            other_doctor_id.clone(),
+            vec![CreateScheduleSlot {
+                start_time: start,
+                minutes: 30,
+            }],
+        )
+        .await
+        .unwrap();
+        assert_eq!(other_doctor_ids.len(), 1);
+
+        let adjacent_ids = repository::create_doctor_schedule(
+            doctor_id.clone(),
+            vec![CreateScheduleSlot {
+                start_time: start_at(30),
+                minutes: 30,
+            }],
+        )
+        .await
+        .unwrap();
+        assert_eq!(adjacent_ids.len(), 1);
+
+        let rejected_batch = repository::create_doctor_schedule(
+            doctor_id.clone(),
+            vec![
+                CreateScheduleSlot {
+                    start_time: start_at(180),
+                    minutes: 30,
+                },
+                CreateScheduleSlot {
+                    start_time: start_at(10),
+                    minutes: 30,
+                },
+            ],
+        )
+        .await;
+        assert!(rejected_batch.is_err());
+
+        let rejected_internal_overlap = repository::create_doctor_schedule(
+            doctor_id.clone(),
+            vec![
+                CreateScheduleSlot {
+                    start_time: start_at(300),
+                    minutes: 30,
+                },
+                CreateScheduleSlot {
+                    start_time: start_at(315),
+                    minutes: 30,
+                },
+            ],
+        )
+        .await;
+        assert!(rejected_internal_overlap.is_err());
+
+        let overflow_result = repository::create_doctor_schedule(
+            doctor_id.clone(),
+            vec![CreateScheduleSlot {
+                start_time: BsonDateTime::from_millis(i64::MAX - 60_000),
+                minutes: 30,
+            }],
+        )
+        .await;
+        assert!(overflow_result.is_err());
+
+        assert_eq!(
+            schedule_collection
+                .count_documents(doc! { "doctor_id": &doctor_id })
+                .await
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            schedule_collection
+                .count_documents(doc! { "doctor_id": &other_doctor_id })
+                .await
+                .unwrap(),
+            1
+        );
     }
 
     #[tokio::test]
@@ -226,7 +469,7 @@ mod doctor_repository_test {
 
         let schedule = vec![CreateScheduleSlot {
             start_time: past_time,
-            end_time: None,
+            minutes: 30,
         }];
 
         let result = repository::create_doctor_schedule(doctor_id, schedule).await;

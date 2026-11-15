@@ -1,4 +1,4 @@
-/// Doctor Schedule is designed such that a Doctor can only have one ScheduleID
+/// Each doctor schedule slot has its own document and ID.
 pub(crate) mod error;
 pub mod handlers;
 pub mod models;
@@ -13,13 +13,15 @@ pub fn doctor_config_v1(cfg: &mut web::ServiceConfig) {
         web::scope("/doctor")
             .service(handlers::check_doctor_exists)
             .service(handlers::create_doctor)
+            .service(handlers::get_inactive_doctor_list)
             .service(handlers::get_doctor)
             .service(handlers::list_doctors)
-            .service(handlers::get_inactive_doctor_list)
             .service(handlers::delete_doctor)
             .service(handlers::enable_doctor)
+            .service(handlers::disable_doctor)
             .service(handlers::create_doctor_schedule)
             .service(handlers::get_active_doctor_schedule)
+            .service(handlers::get_full_doctor_schedule)
             // .service(handlers::update_doctor)
             .default_service(
                 web::route()

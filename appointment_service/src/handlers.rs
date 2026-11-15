@@ -117,16 +117,17 @@ pub(crate) async fn confirm_appointment(
 
 // endpoint used by the Doctor to cancel an appointment
 // changes AppointmentStatus from `Scheduled` to `Canceled`
+// only Doctor can cancel appointment, not patient
 #[patch("/{appointment_id}/cancel")]
 #[instrument(name = "cancel_doctor_appointment_request", fields(id = ?app_id))]
 pub(crate) async fn cancel_appointment(
-    payload: web::Json<models::UpdateAppointmentStatusDto>,
+    payload: web::Json<models::CancelAppointmentDto>,
     app_id: web::Path<String>,
 ) -> HttpResponse {
     info!("cancelling appointment");
     let appointment_id = app_id.into_inner();
     let payload = payload.into_inner();
-    match repository::cancel_appointment(appointment_id, payload.reason.unwrap()).await {
+    match repository::cancel_appointment(appointment_id, payload).await {
         Ok(_) => {
             info!("Successfully canceled appointment");
             HttpResponse::Ok().finish()
@@ -179,6 +180,24 @@ pub(crate) async fn no_show_appointment(
         }
         Err(e) => {
             debug!(cause = %e, "Error for NoShow appointment");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+// return history changes for a particular appointment-ID
+#[get("/{appointment_id}/status-history")]
+#[instrument(name = "appointment_status_history", fields(appointment_id = ?payload))]
+pub(crate) async fn appointment_status_history(payload: web::Path<String>) -> HttpResponse {
+    info!("Retrieving appointment_status_history");
+
+    match repository::appointment_status_history(payload.into_inner()).await {
+        Ok(history) => {
+            info!("successfully retrieved appointment history.");
+            HttpResponse::Ok().json(history)
+        }
+        Err(e) => {
+            debug!(cause = %e, "Error retrieving appointments");
             HttpResponse::InternalServerError().finish()
         }
     }

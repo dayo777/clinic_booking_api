@@ -27,6 +27,8 @@ pub enum AppointmentScheduleError {
     AppointmentNotFound,
     #[error("Unable to schedule appointment")]
     UnableToScheduleAppointment,
+    #[error("Unable to cancel appointment: {0}")]
+    CancelAppointment(String),
     #[error("Database error: {0}")]
     Database(#[from] MongodbError),
     #[error("Internal error: {0}")]
@@ -49,6 +51,7 @@ impl ResponseError for AppointmentScheduleError {
             }
             Self::AppointmentNotFound => StatusCode::NOT_FOUND,
             Self::UnableToScheduleAppointment => StatusCode::FORBIDDEN,
+            Self::CancelAppointment(_) => StatusCode::FORBIDDEN,
         }
     }
 

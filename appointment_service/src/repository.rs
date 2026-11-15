@@ -3,12 +3,14 @@
 use crate::error::AppointmentScheduleError;
 use crate::models::{
     AppointmentDto, AppointmentResponseDto, AppointmentStatus, AppointmentStatusHistoryDto,
-    CreateAppointmentDto, PaginationQuery,
+    CancelAppointmentDto, CanceledBy, CreateAppointmentDto, PaginationQuery,
 };
 use crate::utils;
-use common::models::ScheduleSlot;
 use common::{db::get_collection, utils::generate_id};
-use doctor_service::repository::{SCHEDULE_COLLECTION, get_active_doctor_schedule, get_doctor};
+use doctor_service::models::DoctorSchedule;
+use doctor_service::repository::{
+    SCHEDULE_COLLECTION, get_active_doctor_schedule, get_doctor, update_doctor_schedule_to_false,
+};
 use futures::stream::TryStreamExt;
 use mongodb::bson::DateTime as BsonDateTime;
 use mongodb::bson::doc;
@@ -67,45 +69,24 @@ pub async fn create_appointment(
 
     // verify slot exists and is available
     let allocated_slot = match utils::verify_slot_id_exist(payload.slot_id.as_str(), &slots) {
-        Ok(slot) => {
-            let schedule_collection = get_collection::<ScheduleSlot>(SCHEDULE_COLLECTION);
-
-            // filter by _id not slot_id
-            let filter = doc! {
-                "doctor_id": &payload.doctor_id,
-                "slots._id": &payload.slot_id,
-            };
-
-            let update = doc! {
-                "$set": {
-                    "slots.$.is_available": false   // ← $ positional operator updates matched slot
-                }
-            };
-
-            schedule_collection
-                .update_one(filter, update)
-                .await
-                .map_err(AppointmentScheduleError::Database)?;
-
-            slot.clone()
-        }
+        Ok(slot) => update_doctor_schedule_to_false(payload.doctor_id.clone(), slot.clone())
+            .await
+            .map_err(|e| AppointmentScheduleError::Internal(e.to_string()))?,
         Err(_) => return Err(AppointmentScheduleError::UnableToScheduleAppointment),
     };
 
     // build appointment — use String IDs directly, no ObjectId parsing
     let notes = Some(payload.notes.unwrap_or_default());
     let start_time = allocated_slot.start_time;
-    let end_time = allocated_slot.end_time.unwrap_or_else(|| {
-        BsonDateTime::from_millis(start_time.timestamp_millis() + (30 * 60 * 1000))
-    });
+    let end_time = allocated_slot.end_time;
 
     let appointment_id = generate_id("app", ID_LENGTH);
 
     let new_appointment = AppointmentDto {
         appointment_id,
-        slot_id: payload.slot_id.clone(),       // ← String directly
-        doctor_id: payload.doctor_id.clone(),   // ← String directly
-        patient_id: payload.patient_id.clone(), // ← String directly
+        slot_id: payload.slot_id.clone(),       // String directly
+        doctor_id: payload.doctor_id.clone(),   // String directly
+        patient_id: payload.patient_id.clone(), // String directly
         start_time,
         end_time,
         specialty: payload.specialty,
@@ -127,16 +108,19 @@ pub async fn create_appointment(
         payload.slot_id, payload.doctor_id, payload.patient_id
     );
 
-    let inserted = appointment_collection
-        .insert_one(new_appointment)
-        .await
-        .map_err(AppointmentScheduleError::from)?;
-
-    Ok(inserted
-        .inserted_id
-        .as_object_id()
-        .map(|id| id.to_hex())
-        .unwrap_or_else(|| inserted.inserted_id.to_string()))
+    let appointment_id = new_appointment.appointment_id.clone();
+    if let Err(error) = appointment_collection.insert_one(new_appointment).await {
+        // Undo the slot claim if the appointment cannot be saved.
+        get_collection::<DoctorSchedule>(SCHEDULE_COLLECTION)
+            .update_one(
+                doc! { "_id": &payload.slot_id, "doctor_id": &payload.doctor_id,
+                "is_available": false, "updated_at": allocated_slot.updated_at },
+                doc! { "$set": { "is_available": true, "updated_at": BsonDateTime::now() } },
+            )
+            .await?;
+        return Err(AppointmentScheduleError::Database(error));
+    }
+    Ok(appointment_id)
 }
 
 // retrieve a Single appointment by appointment-id
@@ -206,18 +190,7 @@ pub async fn get_all_patient_appointments(
     let mut patient_appointments = Vec::new();
 
     while let Some(app) = cursor.try_next().await? {
-        patient_appointments.push(AppointmentResponseDto {
-            appointment_id: app.appointment_id,
-            slot_id: app.slot_id,
-            doctor_id: app.doctor_id,
-            patient_id: app.patient_id,
-            start_time: app.start_time,
-            end_time: app.end_time,
-            specialty: app.specialty,
-            status: app.status,
-            status_history: app.status_history,
-            notes: app.notes,
-        });
+        patient_appointments.push(AppointmentResponseDto::from(app));
     }
 
     Ok(patient_appointments)
@@ -257,18 +230,7 @@ pub async fn get_all_doctor_appointments(
     let mut doctor_appointments = Vec::new();
 
     while let Some(app) = cursor.try_next().await? {
-        doctor_appointments.push(AppointmentResponseDto {
-            appointment_id: app.appointment_id,
-            slot_id: app.slot_id,
-            doctor_id: app.doctor_id,
-            patient_id: app.patient_id,
-            start_time: app.start_time,
-            end_time: app.end_time,
-            specialty: app.specialty,
-            status: app.status,
-            status_history: app.status_history,
-            notes: app.notes,
-        });
+        doctor_appointments.push(AppointmentResponseDto::from(app))
     }
 
     Ok(doctor_appointments)
@@ -323,20 +285,52 @@ pub async fn confirm_appointment(
     Ok(())
 }
 
-// TODO: should only be able to cancel appointment if appointment is in `Scheduled` OR `Confirmed` status
-// change AppointmentStatus to `canceled` & update status-history
+// both Patient/doctor can cancel appointment
+// doctor can cancel at any-time, while patient can cancel 24hrs prior
 #[instrument(name = "db_cancel_appointment", fields(appointment_id = ?appointment_id))]
 pub async fn cancel_appointment(
     appointment_id: String,
-    reason: String,
+    payload: CancelAppointmentDto,
 ) -> Result<(), AppointmentScheduleError> {
     let filter = doc! {"_id": &appointment_id};
+    let collection = get_collection::<AppointmentDto>(APPOINTMENT_COLLECTION);
+    let existing = collection
+        .find_one(filter.clone())
+        .await?
+        .ok_or(AppointmentScheduleError::AppointmentNotFound)?;
 
-    let reason = if reason.is_empty() {
-        String::from("Appointment Cancelled")
-    } else {
-        reason
-    };
+    match existing.status {
+        AppointmentStatus::Scheduled | AppointmentStatus::Confirmed => {}
+        _ => {
+            return Err(AppointmentScheduleError::CancelAppointment(format!(
+                "Cannot cancel an appointment with status: {:?}",
+                existing.status
+            )));
+        }
+    }
+
+    // Check 24hr rule for Patient cancellation
+    if payload.canceled_by == CanceledBy::Patient {
+        match utils::validate_cancellation_window(&existing.start_time) {
+            Ok(_) => {}
+            Err(err) => return Err(err),
+        }
+    }
+
+    let reason = format!(
+        "Cancel by {:?}{}",
+        payload.canceled_by,
+        payload
+            .reason
+            .map(|r| format!(": {}", r))
+            .unwrap_or_default()
+    );
+
+    let status_bson = mongodb::bson::to_bson(&AppointmentStatus::Canceled).map_err(|_| {
+        AppointmentScheduleError::Internal(String::from(
+            "Unable to convert Appointment status to BSON",
+        ))
+    })?;
 
     let appointment_status_update = AppointmentStatusHistoryDto {
         status: AppointmentStatus::Canceled,
@@ -344,11 +338,6 @@ pub async fn cancel_appointment(
         reason,
     };
 
-    let status_bson = mongodb::bson::to_bson(&AppointmentStatus::Canceled).map_err(|_| {
-        AppointmentScheduleError::Internal(String::from(
-            "Unable to convert Appointment status to BSON",
-        ))
-    })?;
     let status_history_bson = mongodb::bson::to_bson(&appointment_status_update).map_err(|_| {
         AppointmentScheduleError::Internal(String::from(
             "Unable to convert Appointment history status to BSON",
@@ -365,7 +354,6 @@ pub async fn cancel_appointment(
         }
     };
 
-    let collection = get_collection::<AppointmentDto>(APPOINTMENT_COLLECTION);
     info!("Updating appointment status to canceled");
     collection.update_one(filter, modified_content).await?;
 
@@ -470,9 +458,23 @@ pub async fn no_show_appointment(
     Ok(())
 }
 
+#[instrument(name = "db_appointment_changes", fields(appointment_id = ?appointment_id))]
+pub async fn appointment_status_history(
+    appointment_id: String,
+) -> Result<Vec<AppointmentStatusHistoryDto>, AppointmentScheduleError> {
+    let filter = doc! {"_id": &appointment_id};
+    let collection = get_collection::<AppointmentDto>(APPOINTMENT_COLLECTION);
+    let result = collection
+        .find_one(filter)
+        .await
+        .map_err(|_| AppointmentScheduleError::AppointmentNotFound)?
+        .unwrap();
+
+    Ok(result.status_history)
+}
+
 // TODO: recommendations to note
 // 1. Make status a Rust enum serialized to a string (#[serde(rename_all = "snake_case")]) so it's readable in the DB and index-friendly.
-// 2. Add created_at / updated_at and consider a small embedded status_history array if you need an audit trail of transitions.
 // 3. Enforce valid transitions in the service layer (e.g., can't go Completed → Scheduled), and use conditional updates (updateOne with a filter on the expected current status) to avoid race conditions.
 
 // TODO: Other handlers to add

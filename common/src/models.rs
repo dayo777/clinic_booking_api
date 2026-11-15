@@ -56,7 +56,9 @@ impl<'de> Deserialize<'de> for Specialty {
     {
         let s = String::deserialize(deserializer)?;
         match s.to_ascii_lowercase().as_str() {
-            "gp" | "general practice" | "generalpractice" => Ok(Self::GeneralPractice),
+            "gp" | "general practice" | "general-practice" | "generalpractice" => {
+                Ok(Self::GeneralPractice)
+            }
             "neuro" | "neuro surgery" | "neurosurgery" => Ok(Self::Neurosurgery),
             "cardio" | "cardiology" => Ok(Self::Cardiology),
             "derm" | "dermatology" => Ok(Self::Dermatology),
@@ -77,8 +79,8 @@ pub struct ScheduleSlot {
     #[serde(deserialize_with = "deserialize_bson_datetime_or_string")]
     pub start_time: BsonDateTime,
     // this is an Option so we can make every Schedule 30min long by default unless otherwise set
-    #[serde(deserialize_with = "deserialize_option_bson_datetime_or_string")]
-    pub end_time: Option<BsonDateTime>,
+    #[serde(deserialize_with = "deserialize_bson_datetime_or_string")]
+    pub end_time: BsonDateTime,
     // make this an Option so `ViewDoctorSchedule` can peek a ScheduleSlot
     #[serde(default)]
     pub is_available: bool, // changes to `False` once booked by a patient
@@ -95,7 +97,7 @@ pub struct ScheduleSlot {
 pub struct CreateScheduleSlot {
     #[serde(deserialize_with = "deserialize_bson_datetime_or_string")]
     pub start_time: BsonDateTime,
-    // this is an Option so we can make every Schedule 30min long by default unless otherwise set
-    #[serde(deserialize_with = "deserialize_option_bson_datetime_or_string")]
-    pub end_time: Option<BsonDateTime>,
+    // the total minutes to add for this schedule
+    #[validate(range(min = 10, max = 60))]
+    pub minutes: i64,
 }

@@ -238,19 +238,31 @@ pub async fn disable_doctor(doctor_id: String) -> Result<bool, DoctorServiceErro
     }
 }
 
-// TODO: this doesn't work as intended. Fix this.
+// #[instrument(name = "db_doctor_exists", fields(doctor_id = %doctor_id))]
+// pub async fn doctor_exists(doctor_id: String) -> Result<bool, DoctorServiceError> {
+//     let filter = doc! { "_id": &doctor_id, "is_active": true };
+//     let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
+//     let result = collection.find_one(filter).await?;
+//     Ok(result.is_some())
+// }
+
+use mongodb::bson::Document;
+
 #[instrument(name = "db_doctor_exists")]
 pub async fn doctor_exists(doctor_id: String) -> Result<bool, DoctorServiceError> {
-    let filter = doc! { "_id": doctor_id };
-    let collection = get_collection::<DoctorDto>(DOCTOR_COLLECTION);
+    let collection = get_collection::<Document>(DOCTOR_COLLECTION);
 
-    let result = collection.find_one(filter).await?;
+    let found = collection.find_one(doc! { "_id": &doctor_id }).await?;
 
-    match result {
-        Some(doctor) if doctor.is_active => Ok(true),
-        None => Err(DoctorServiceError::DoctorNotFound),
-        _ => Ok(false),
+    match &found {
+        None => info!(
+            "doctor_exists: no document with _id [{}] in collection [{}]",
+            doctor_id, DOCTOR_COLLECTION
+        ),
+        Some(d) => info!("doctor_exists: found, is_active = {:?}", d.get("is_active")),
     }
+
+    Ok(found.is_some_and(|d| d.get_bool("is_active").unwrap_or(false)))
 }
 
 // Create one document per slot. The request remains a batch of slots.

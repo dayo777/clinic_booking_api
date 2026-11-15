@@ -9,12 +9,13 @@ use validator::Validate;
 #[head("/{id}")]
 pub(crate) async fn check_doctor_exists(path: web::Path<String>) -> HttpResponse {
     let id = path.into_inner();
+    info!("HEAD handler reached with id: [{}]", id);
 
     match repository::doctor_exists(id).await {
         Ok(true) => HttpResponse::NoContent().finish(),
         Ok(false) => HttpResponse::NotFound().finish(),
         Err(e) => {
-            error!(cause = %e, "Failed to check whether doctor exists");
+            error!("doctor_exists failed: {:?}", e);
             HttpResponse::InternalServerError().finish()
         }
     }
